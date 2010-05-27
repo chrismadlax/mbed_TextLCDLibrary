@@ -108,6 +108,4 @@ protected:
     int _row;
 };
 
-}
-
 #endif
