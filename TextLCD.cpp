@@ -23,33 +23,6 @@
 #include "TextLCD.h"
 #include "mbed.h"
 
-/* useful info found at http://www.a-netz.de/lcd.en.php
- *
- * Initialisation
- * ==============
- *
- * After attaching the supply voltage/after a reset, the display needs to be brought in to a defined state
- *
- * - wait approximately 15 ms so the display is ready to execute commands
- * - Execute the command 0x30 ("Display Settings") three times (wait 1,64ms after each command, the busy flag cannot be queried now).
- * - The display is in 8 bit mode, so if you have only connected 4 data pins you should only transmit the higher nibble of each command.
- * - If you want to use the 4 bit mode, now you can execute the command to switch over to this mode now.
- * - Execute the "clear display" command
- *
- * Timing
- * ======
- *
- * Nearly all commands transmitted to the display need 40us for execution.
- * Exceptions are the commands "Clear Display and Reset" and "Set Cursor to Start Position"
- * These commands need 1.64ms for execution. These timings are valid for all displays working with an
- * internal clock of 250kHz. But I do not know any displays that use other frequencies. Any time you
- * can use the busy flag to test if the display is ready to accept the next command.
- *
- * _e is kept high apart from calling clock
- * _rw is kept 0 (write) apart from actions that uyse it differently
- * _rs is set by the data/command writes
- */
-
 TextLCD::TextLCD(PinName rs, PinName e, PinName d0, PinName d1,
                  PinName d2, PinName d3, LCDType type) : _rs(rs),
         _e(e), _d(d0, d1, d2, d3),
