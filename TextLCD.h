@@ -1,4 +1,4 @@
-/* mbed TextLCD Library, for a 4-bit 2x16 LCD
+/* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,30 +19,53 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
- 
-#include "TextDisplay.h"
 
 #ifndef MBED_TEXTLCD_H
 #define MBED_TEXTLCD_H
 
-class TextLCD : public TextDisplay {
+#include "mbed.h"
+class TextLCD : public Stream {
 public:
 
-    TextLCD(PinName rs, PinName rw, PinName e, PinName d0, PinName d1, PinName d2, PinName d3);
-    virtual void character(int column, int row, int c);
-    virtual int rows(); 
-    virtual int columns();  
+    // the different LCDs and addressing modes
+    /** Select the type of LCD */
+    enum LCDType {
+        LCD16x2
+        , LCD16x2B
+        , LCD20x2
+        , LCD20x4
+    };
 
-    // locate, cls, putc, printf come from derived classes
+    TextLCD(PinName rs, PinName e, PinName d0, PinName d1, PinName d2, PinName d3, LCDType type = LCD16x2);
+    // int putc(int c) inherited from Stream
+    // int printf(...) inherited from Stream
+    void character(int column, int row, int c);
+    void locate(int column, int row);
+    void cls();
+    
+    int rows();
+    int columns();  
+    
     
 protected:
 
+    // Stream implementation functions
+    virtual int _putc(int value);
+    virtual int _getc();
+
+    // internal tx functions
     void writeByte(int value);
     void writeCommand(int command);
     void writeData(int data);
+    int address(int column, int row);
 
-    DigitalOut _rw, _rs, _e;
+    DigitalOut _rs, _e;
     BusOut _d;
+    LCDType _type;
+
+    // current row/column
+    int _column;
+    int _row;
 };
 
 #endif
