@@ -126,11 +126,11 @@ int TextLCD::address(int column, int row) {
                     return 0xd4 + column;
             }
         case LCD16x2B:
-            return 0x80 + (row * 0x40) + column;
+            return 0x80 + (row * 40) + column;
         case LCD16x2:
         case LCD20x2:
         default:
-            return 0x80 + (row * 40) + column;
+            return 0x80 + (row * 0x40) + column;
     }
 }
 
