@@ -25,16 +25,16 @@
 
 #include "mbed.h"
 
-/** A TextLCD interface for 4-bit HD44780-based LCDs
+/** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Supports a number of different panel configurations
+ * Currently supports 16x2, 20x2 and 20x4 panels
  *
  * @code
  * #include "mbed.h"
  * #include "TextLCD.h"
- *
- * TextLCD lcd(p5, p6, p7, p8, p9);
- *
+ * 
+ * TextLCD lcd(p10, p12, p15, p16, p29, p30); // rs, e, d0-d3
+ * 
  * int main() {
  *     lcd.printf("Hello World!\n");
  * }
