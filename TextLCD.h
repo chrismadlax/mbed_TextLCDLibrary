@@ -33,7 +33,7 @@
  * #include "mbed.h"
  * #include "TextLCD.h"
  * 
- * TextLCD lcd(p10, p12, p15, p16, p29, p30); // rs, e, d0-d3
+ * TextLCD lcd(p10, p12, p15, p16, p29, p30); // rs, e, d4-d7
  * 
  * int main() {
  *     lcd.printf("Hello World!\n");
@@ -55,10 +55,10 @@ public:
      *
      * @param rs    Instruction/data control line
      * @param e     Enable line (clock)
-     * @param d0-d3 Data lines
+     * @param d4-d7 Data lines for using as a 4-bit interface
      * @param type  Sets the panel size/addressing mode (default = LCD16x2)
      */
-    TextLCD(PinName rs, PinName e, PinName d0, PinName d1, PinName d2, PinName d3, LCDType type = LCD16x2);
+    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2);
 
 #if DOXYGEN_ONLY
     /** Write a character to the LCD
