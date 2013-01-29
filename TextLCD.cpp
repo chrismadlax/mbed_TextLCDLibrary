@@ -1,5 +1,6 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford, http://mbed.org
+ *               2013, WH, Updated LCD types and fixed lcd address issues
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,15 +44,18 @@ TextLCD::TextLCD(PinName rs, PinName e, PinName d4, PinName d5,
 
     writeCommand(0x28); // Function set 001 BW N F - -
     writeCommand(0x0C);
-    writeCommand(0x6);  // Cursor Direction and Display Shift : 0000 01 CD S (CD 0-left, 1-right S(hift) 0-no, 1-yes
+    writeCommand(0x06); // Cursor Direction and Display Shift : 0000 01 CD S (CD 0-left, 1-right S(hift) 0-no, 1-yes
     cls();
 }
 
+
 void TextLCD::character(int column, int row, int c) {
-    int a = address(column, row);
-    writeCommand(a);
+    int addr = getAddress(column, row);
+    
+    writeCommand(0x80 | addr);
     writeData(c);
 }
+
 
 void TextLCD::cls() {
     writeCommand(0x01); // cls, and set cursor to 0
@@ -112,6 +116,12 @@ void TextLCD::writeData(int data) {
     writeByte(data);
 }
 
+
+#if (0)
+// This is the original method.
+// It is confusing since it returns the memoryaddress or-ed with the set memorycommand 0x80.
+// Left it in here for compatibility with older code. New applications should use getAddress() instead.
+// 
 int TextLCD::address(int column, int row) {
     switch (_type) {
         case LCD20x4:
@@ -133,27 +143,116 @@ int TextLCD::address(int column, int row) {
             return 0x80 + (row * 0x40) + column;
     }
 }
+#endif
+
+
+// This replaces the original method.
+// Left it in here for compatibility with older code. New applications should use getAddress() instead.
+int TextLCD::address(int column, int row) {
+  return 0x80 | getAddress(column, row);
+}
+
+// This is new method to return the memory address based on row, column and displaytype.
+//
+int TextLCD::getAddress(int column, int row) {
+
+    switch (_type) {
+        case LCD8x1:
+            return 0x00 + column;                        
+    
+        case LCD16x4:
+            switch (row) {
+                case 0:
+                    return 0x00 + column;
+                case 1:
+                    return 0x40 + column;
+                case 2:
+                    return 0x10 + column;
+                case 3:
+                    return 0x50 + column;
+            }
+
+        case LCD20x4:
+            switch (row) {
+                case 0:
+                    return 0x00 + column;
+                case 1:
+                    return 0x40 + column;
+                case 2:
+                    return 0x14 + column;
+                case 3:
+                    return 0x54 + column;
+            }
+
+// Not sure about this one, seems wrong.
+        case LCD16x2B:      
+            return 0x00 + (row * 40) + column;
+      
+        case LCD8x2:        
+        case LCD16x2:
+        case LCD20x2:
+        case LCD24x2:        
+            return 0x00 + (row * 0x40) + column;
+            
+// Should never get here.
+        default:            
+            return 0x00;        
+    }
+}
+
+
+// Added for consistency. Set row, colum and update memoryaddress.
+//
+void TextLCD::setAddress(int column, int row) {
+
+    locate(column, row);
+    
+    int addr = getAddress(column, row);
+    
+    writeCommand(0x80 | addr);
+}
 
 int TextLCD::columns() {
     switch (_type) {
-        case LCD20x4:
-        case LCD20x2:
-            return 20;
+        case LCD8x1:
+        case LCD8x2:
+            return 8;
+
         case LCD16x2:
         case LCD16x2B:
-        default:
+        case LCD16x4:        
             return 16;
+            
+        case LCD20x2:
+        case LCD20x4:
+            return 20;
+
+        case LCD24x2:
+            return 24;        
+        
+// Should never get here.
+        default:
+            return 0;
     }
 }
 
 int TextLCD::rows() {
     switch (_type) {
-        case LCD20x4:
-            return 4;
+        case LCD8x1: 
+            return 1;           
+
+        case LCD8x2:        
         case LCD16x2:
         case LCD16x2B:
         case LCD20x2:
-        default:
+        case LCD24x2:        
             return 2;
+                    
+        case LCD16x4:
+        case LCD20x4:
+            return 4;
+      
+        default:
+            return 0;        
     }
 }
