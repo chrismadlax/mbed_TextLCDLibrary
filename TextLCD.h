@@ -1,5 +1,6 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford, http://mbed.org
+ *               2013, WH, Updated LCD types and fixed lcd address issues
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +28,7 @@
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 16x2, 20x2 and 20x4 panels
+ * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4 and 24x2 panels
  *
  * @code
  * #include "mbed.h"
@@ -40,15 +41,20 @@
  * }
  * @endcode
  */
+
 class TextLCD : public Stream {
 public:
 
     /** LCD panel format */
     enum LCDType {
-        LCD16x2     /**< 16x2 LCD panel (default) */
-        , LCD16x2B  /**< 16x2 LCD panel alternate addressing */
-        , LCD20x2   /**< 20x2 LCD panel */
-        , LCD20x4   /**< 20x4 LCD panel */
+        LCD8x1,     /**<  8x1 LCD panel */    
+        LCD8x2,     /**<  8x2 LCD panel */            
+        LCD16x2,    /**< 16x2 LCD panel (default) */
+        LCD16x2B,   /**< 16x2 LCD panel alternate addressing */
+        LCD16x4,    /**< 16x4 LCD panel */        
+        LCD20x2,    /**< 20x2 LCD panel */
+        LCD20x4,    /**< 20x4 LCD panel */
+        LCD24x2     /**< 24x2 LCD panel */        
     };
 
     /** Create a TextLCD interface
@@ -94,7 +100,9 @@ protected:
     virtual int _putc(int value);
     virtual int _getc();
 
-    int address(int column, int row);
+    int  address(int column, int row);
+    int  getAddress(int column, int row);    
+    void setAddress(int column, int row);        
     void character(int column, int row, int c);
     void writeByte(int value);
     void writeCommand(int command);
