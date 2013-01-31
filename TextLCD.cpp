@@ -192,6 +192,7 @@ int TextLCD::getAddress(int column, int row) {
         case LCD16x2:
         case LCD20x2:
         case LCD24x2:        
+        case LCD40x2:                
             return 0x00 + (row * 0x40) + column;
             
 // Should never get here.
@@ -229,6 +230,9 @@ int TextLCD::columns() {
 
         case LCD24x2:
             return 24;        
+
+        case LCD40x2:
+            return 40;        
         
 // Should never get here.
         default:
@@ -246,6 +250,7 @@ int TextLCD::rows() {
         case LCD16x2B:
         case LCD20x2:
         case LCD24x2:        
+        case LCD40x2:                
             return 2;
                     
         case LCD16x4:
