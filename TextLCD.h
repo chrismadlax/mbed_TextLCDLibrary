@@ -28,7 +28,7 @@
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4 and 24x2 panels
+ * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4, 24x2 and 40x2 panels
  *
  * @code
  * #include "mbed.h"
@@ -54,7 +54,8 @@ public:
         LCD16x4,    /**< 16x4 LCD panel */        
         LCD20x2,    /**< 20x2 LCD panel */
         LCD20x4,    /**< 20x4 LCD panel */
-        LCD24x2     /**< 24x2 LCD panel */        
+        LCD24x2,    /**< 24x2 LCD panel */        
+        LCD40x2     /**< 40x2 LCD panel */                
     };
 
     /** Create a TextLCD interface
@@ -88,6 +89,9 @@ public:
      */
     void locate(int column, int row);
 
+    int  getAddress(int column, int row);    
+    void setAddress(int column, int row);        
+
     /** Clear the screen and locate to 0,0 */
     void cls();
 
@@ -101,8 +105,6 @@ protected:
     virtual int _getc();
 
     int  address(int column, int row);
-    int  getAddress(int column, int row);    
-    void setAddress(int column, int row);        
     void character(int column, int row, int c);
     void writeByte(int value);
     void writeCommand(int command);
