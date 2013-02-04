@@ -42,10 +42,58 @@ TextLCD::TextLCD(PinName rs, PinName e, PinName d4, PinName d5,
     writeByte(0x2);     // 4-bit mode
     wait(0.000040f);    // most instructions take 40us
 
-    writeCommand(0x28); // Function set 001 BW N F - -
-    writeCommand(0x0C);
-    writeCommand(0x06); // Cursor Direction and Display Shift : 0000 01 CD S (CD 0-left, 1-right S(hift) 0-no, 1-yes
-    cls();
+    // Display is now in 4-bit mode
+    switch (_type) {
+        case LCD8x1:
+            writeCommand(0x20); // Function set 001 BW N F - -
+                                //   N=0 (1 line)
+                                //   F=0 (5x7 dots font)
+            break;                                
+            
+        case LCD24x4:
+            // Special mode for KS0078
+            writeCommand(0x2A); // Function set 001 BW N RE DH REV
+                                //    N=1  (Dont care for KS0078)
+                                //   RE=0  (Extended Regs, special mode for KS0078)
+                                //   DH=1  (Disp shift, special mode for KS0078)                                
+                                //   REV=0 (Reverse, special mode for KS0078)
+
+            writeCommand(0x2E); // Function set 001 BW N RE DH REV
+                                //    N=1  (Dont care for KS0078)
+                                //   RE=1  (Ena Extended Regs, special mode for KS0078)
+                                //   DH=1  (Disp shift, special mode for KS0078)                                
+                                //   REV=0 (Reverse, special mode for KS0078)
+
+            writeCommand(0x09); // Ext Function set 0000 1 FW BW NW
+                                //   FW=0  (5-dot font, special mode for KS0078)
+                                //   BW=0  (Cur BW invert disable, special mode for KS0078)
+                                //   NW=1  (4 Line, special mode for KS0078)                                
+
+            writeCommand(0x2A); // Function set 001 BW N RE DH REV
+                                //    N=1  (Dont care for KS0078)
+                                //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                //   DH=1  (Disp shift, special mode for KS0078)                                
+                                //   REV=0 (Reverse, special mode for KS0078)
+            break;
+                                            
+        default:
+            writeCommand(0x28); // Function set 001 BW N F - -
+                                //   N=1 (2 lines)
+                                //   F=0 (5x7 dots font)
+            
+            break;
+    }
+
+    writeCommand(0x0C); // Display Ctrl 0000 1 D C B
+                        //   Display On, Cursor Off, Blink Off
+    _cursor = CurOff;                                
+    
+    writeCommand(0x06); // Entry Mode 0000 01 CD S 
+                        //   Cursor Direction and Display Shift
+                        //   CD=1 (Cur incr)
+                        //   S=0  (No display shift)                        
+
+    cls();    
 }
 
 
@@ -184,6 +232,19 @@ int TextLCD::getAddress(int column, int row) {
                     return 0x54 + column;
             }
 
+// Special mode for KS0078
+        case LCD24x4:
+            switch (row) {
+                case 0:
+                    return 0x00 + column;
+                case 1:
+                    return 0x20 + column;
+                case 2:
+                    return 0x40 + column;
+                case 3:
+                    return 0x60 + column;
+            }
+
 // Not sure about this one, seems wrong.
         case LCD16x2B:      
             return 0x00 + (row * 40) + column;
@@ -229,6 +290,7 @@ int TextLCD::columns() {
             return 20;
 
         case LCD24x2:
+        case LCD24x4:        
             return 24;        
 
         case LCD40x2:
@@ -255,9 +317,34 @@ int TextLCD::rows() {
                     
         case LCD16x4:
         case LCD20x4:
+        case LCD24x4:        
             return 4;
       
         default:
             return 0;        
     }
 }
+
+
+TextLCD::LCDCursor TextLCD::cursor(TextLCD::LCDCursor show) { 
+    LCDCursor cur = _cursor;
+    
+    switch (show) {
+      case CurOn  : writeCommand(0x0F); // Cursor on and Blink char
+                    wait_us(40);  
+                    _cursor = show;
+                    break;
+      case CurOff : writeCommand(0x0C);
+                    wait_us(40);
+                    _cursor = show;
+                    break;
+      default : 
+                    break;
+                      
+    }
+    return cur;
+}
+
+
+
+
