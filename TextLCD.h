@@ -28,7 +28,7 @@
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4, 24x2 and 40x2 panels
+ * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4 and 40x2 panels
  *
  * @code
  * #include "mbed.h"
@@ -42,6 +42,7 @@
  * @endcode
  */
 
+ 
 class TextLCD : public Stream {
 public:
 
@@ -55,8 +56,16 @@ public:
         LCD20x2,    /**< 20x2 LCD panel */
         LCD20x4,    /**< 20x4 LCD panel */
         LCD24x2,    /**< 24x2 LCD panel */        
+        LCD24x4,    /**< 24x4 LCD panel, special mode KS0078 */                
         LCD40x2     /**< 40x2 LCD panel */                
     };
+
+    /** LCD Cursor control */
+    enum LCDCursor {
+        CurOn,
+        CurOff
+    };
+
 
     /** Create a TextLCD interface
      *
@@ -89,17 +98,46 @@ public:
      */
     void locate(int column, int row);
 
+
+    /** Return the memoryaddress of screen column and row location
+     *
+     * @param column  The horizontal position from the left, indexed from 0
+     * @param row     The vertical position from the top, indexed from 0
+     * @param return  The memoryaddress of screen column and row location
+     */
     int  getAddress(int column, int row);    
+    
+    
+    /** Set the memoryaddress of screen column and row location
+     *
+     * @param column  The horizontal position from the left, indexed from 0
+     * @param row     The vertical position from the top, indexed from 0
+     */
     void setAddress(int column, int row);        
+
+    /** Set the Cursormode
+     *
+     * @param show    The Cursor mode (CurOn or CurOff)
+     * @param return  The current Cursor mode     
+     */
+    LCDCursor cursor(LCDCursor show);     
 
     /** Clear the screen and locate to 0,0 */
     void cls();
 
+    /** Return the number of rows
+     *
+     * @param return  The number of rows
+     */
     int rows();
-    int columns();
+    
+    /** Return the number of columns
+     *
+     * @param return  The number of columns
+     */  
+    int columns();  
 
 protected:
-
     // Stream implementation functions
     virtual int _putc(int value);
     virtual int _getc();
@@ -116,6 +154,7 @@ protected:
 
     int _column;
     int _row;
+    LCDCursor _cursor;    
 };
 
 #endif
