@@ -84,15 +84,15 @@ TextLCD::TextLCD(PinName rs, PinName e, PinName d4, PinName d5,
             break;
     }
 
-    writeCommand(0x0C); // Display Ctrl 0000 1 D C B
-                        //   Display On, Cursor Off, Blink Off
-    _cursor = CurOff;                                
-    
     writeCommand(0x06); // Entry Mode 0000 01 CD S 
                         //   Cursor Direction and Display Shift
                         //   CD=1 (Cur incr)
                         //   S=0  (No display shift)                        
 
+//    writeCommand(0x0C); // Display Ctrl 0000 1 D C B
+//                        //   Display On, Cursor Off, Blink Off
+    cursor(TextLCD::CurOff_BlkOff);  
+    
     cls();    
 }
 
@@ -326,25 +326,43 @@ int TextLCD::rows() {
 }
 
 
-TextLCD::LCDCursor TextLCD::cursor(TextLCD::LCDCursor show) { 
-    LCDCursor cur = _cursor;
+void TextLCD::cursor(TextLCD::LCDCursor show) { 
     
     switch (show) {
-      case CurOn  : writeCommand(0x0F); // Cursor on and Blink char
-                    wait_us(40);  
-                    _cursor = show;
-                    break;
-      case CurOff : writeCommand(0x0C);
-                    wait_us(40);
-                    _cursor = show;
-                    break;
+      case CurOff_BlkOff : writeCommand(0x0C); // Cursor off and Blink Off
+                           wait_us(40);
+                           _cursor = show;
+                           break;
+
+      case CurOn_BlkOff   : writeCommand(0x0E); // Cursor on and Blink Off
+                           wait_us(40);  
+                           _cursor = show;
+                           break;
+
+      case CurOff_BlkOn :  writeCommand(0x0D); // Cursor off and Blink On
+                           wait_us(40);
+                           _cursor = show;
+                           break;
+
+      case CurOn_BlkOn   : writeCommand(0x0F); // Cursor on and Blink char
+                           wait_us(40);  
+                           _cursor = show;
+                           break;
+
       default : 
-                    break;
+                           break;
                       
     }
-    return cur;
+
 }
 
 
+void TextLCD::setUDC(unsigned char c, char *udc_data) {
+  writeCommand(0x40 + ((c & 0x07) << 3)); //Set CG-RAM address
+
+  for (int i=0; i<8; i++) {
+    writeData(*udc_data++);
+  }
+}
 
 
