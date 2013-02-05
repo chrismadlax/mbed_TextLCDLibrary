@@ -1,6 +1,6 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford, http://mbed.org
- *               2013, WH, Updated LCD types and fixed lcd address issues
+ *               2013, WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -319,7 +319,8 @@ int TextLCD::rows() {
         case LCD20x4:
         case LCD24x4:        
             return 4;
-      
+
+// Should never get here.      
         default:
             return 0;        
     }
@@ -349,6 +350,7 @@ void TextLCD::cursor(TextLCD::LCDCursor show) {
                            _cursor = show;
                            break;
 
+// Should never get here.
       default : 
                            break;
                       
