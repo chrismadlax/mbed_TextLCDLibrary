@@ -34,7 +34,7 @@
  * #include "mbed.h"
  * #include "TextLCD.h"
  * 
- * TextLCD lcd(p10, p12, p15, p16, p29, p30); // rs, e, d4-d7
+ * TextLCD lcd(p15, p16, p17, p18, p19, p20); // RS, E, D4-D7 
  * 
  * int main() {
  *     lcd.printf("Hello World!\n");
@@ -42,7 +42,29 @@
  * @endcode
  */
 
- 
+/** User Defined Chars 5x7 dots */
+const char udc_ae[] = {0x00, 0x00, 0x1B, 0x05, 0x1F, 0x14, 0x1F, 0x00};  //æ
+const char udc_0e[] = {0x00, 0x00, 0x0E, 0x13, 0x15, 0x19, 0x0E, 0x00};  //ø
+const char udc_ao[] = {0x0E, 0x0A, 0x0E, 0x01, 0x0F, 0x11, 0x0F, 0x00};  //å
+const char udc_AE[] = {0x0F, 0x14, 0x14, 0x1F, 0x14, 0x14, 0x17, 0x00};  //Æ
+const char udc_0E[] = {0x0E, 0x13, 0x15, 0x15, 0x15, 0x19, 0x0E, 0x00};  //Ø
+const char udc_AA[] = {0x0E, 0x0A, 0x0E, 0x11, 0x1F, 0x11, 0x11, 0x00};  //Å
+
+const char udc_0[]  = {0x18, 0x14, 0x12, 0x11, 0x12, 0x14, 0x18, 0x00};  // |>
+const char udc_1[]  = {0x03, 0x05, 0x09, 0x11, 0x09, 0x05, 0x03, 0x00};  // <|
+const char udc_2[]  = {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00};  // |
+const char udc_3[]  = {0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x00};  // ||
+const char udc_4[]  = {0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x00};  // |||
+const char udc_5[]  = {0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x00};  // =
+const char udc_6[]  = {0x15, 0x0a, 0x15, 0x0a, 0x15, 0x0a, 0x15, 0x00};  // checkerboard
+const char udc_7[]  = {0x10, 0x08, 0x04, 0x02, 0x01, 0x00, 0x10, 0x00};  // \
+
+
+/** A TextLCD interface for driving 4-bit HD44780-based LCDs
+ *
+ * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4 and 40x2 panels
+ *
+ */
 class TextLCD : public Stream {
 public:
 
@@ -62,8 +84,10 @@ public:
 
     /** LCD Cursor control */
     enum LCDCursor {
-        CurOn,
-        CurOff
+        CurOff_BlkOff,
+        CurOn_BlkOff,
+        CurOff_BlkOn,        
+        CurOn_BlkOn,
     };
 
 
@@ -115,12 +139,6 @@ public:
      */
     void setAddress(int column, int row);        
 
-    /** Set the Cursormode
-     *
-     * @param show    The Cursor mode (CurOn or CurOff)
-     * @param return  The current Cursor mode     
-     */
-    LCDCursor cursor(LCDCursor show);     
 
     /** Clear the screen and locate to 0,0 */
     void cls();
@@ -136,6 +154,20 @@ public:
      * @param return  The number of columns
      */  
     int columns();  
+
+    /** Set the Cursormode
+     *
+     * @param show    The Cursor mode (CurOff_BlkOff, CurOn_BlkOff, CurOff_BlkOn, CurOn_BlkOn)
+     */
+    void cursor(LCDCursor show);     
+
+
+    /** Set User Defined Characters
+     *
+     * @param unsigned char c   The Index of the UDC (0..7)
+     * @param char *udc_char    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
+     */
+    void setUDC(unsigned char c, char *udc_data);
 
 protected:
     // Stream implementation functions
