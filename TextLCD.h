@@ -1,6 +1,6 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford, http://mbed.org
- *               2013, WH, Updated LCD types and fixed lcd address issues
+ *               2013, WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -84,10 +84,10 @@ public:
 
     /** LCD Cursor control */
     enum LCDCursor {
-        CurOff_BlkOff,
-        CurOn_BlkOff,
-        CurOff_BlkOn,        
-        CurOn_BlkOn,
+        CurOff_BlkOff,  /**<  Cursor Off, Blinking Char Off */    
+        CurOn_BlkOff,   /**<  Cursor On, Blinking Char Off */    
+        CurOff_BlkOn,   /**<  Cursor Off, Blinking Char On */    
+        CurOn_BlkOn,    /**<  Cursor On, Blinking Char On */    
     };
 
 
@@ -165,7 +165,7 @@ public:
     /** Set User Defined Characters
      *
      * @param unsigned char c   The Index of the UDC (0..7)
-     * @param char *udc_char    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
+     * @param char *udc_data    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
      */
     void setUDC(unsigned char c, char *udc_data);
 
