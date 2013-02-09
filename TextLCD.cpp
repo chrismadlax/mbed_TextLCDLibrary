@@ -24,90 +24,127 @@
 #include "TextLCD.h"
 #include "mbed.h"
 
-TextLCD::TextLCD(PinName rs, PinName e, PinName d4, PinName d5,
-                 PinName d6, PinName d7, LCDType type) : _rs(rs),
-        _e(e), _d(d4, d5, d6, d7),
+TextLCD::TextLCD(PinName rs, PinName e,
+                 PinName d4, PinName d5, PinName d6, PinName d7,
+                 LCDType type): _rs(rs), _e(e),
+                                _d(d4, d5, d6, d7),
+                                _type(type) {
+
+
+  _busType = _PinBus;
+
+  _init();
+
+}
+
+
+TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type) :
+        _rs(NC), _e(NC), _d(NC),
+        _i2c(i2c),
         _type(type) {
+        
+  _slaveAddress = deviceAddress;
+  _busType = _I2CBus;
 
-    _e  = 1;
-    _rs = 0;            // command mode
+  
+  // Init the portexpander bus
+  _lcd_bus = 0x80;
+  
+  // write the new data to the portexpander
+  _i2c->write(_slaveAddress, &_lcd_bus, 1);    
 
+  _init();
+    
+}
+
+/** Init the LCD controller
+ *  4-bit mode, number of lines, no cursor etc
+ *  Clear display 
+ */
+void TextLCD::_init() {
+//    _e  = 1;  
+//    _rs = 0;            // command mode
+
+    _setEnable(true);    
+    _setRS(false);      // command mode
+    
     wait(0.015);        // Wait 15ms to ensure powered up
 
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)
     for (int i=0; i<3; i++) {
-        writeByte(0x3);
+        _writeByte(0x3);
         wait(0.00164);  // this command takes 1.64ms, so wait for it
     }
-    writeByte(0x2);     // 4-bit mode
-    wait(0.000040f);    // most instructions take 40us
+    _writeByte(0x2);     // 4-bit mode
+    wait(0.000040f);     // most instructions take 40us
 
     // Display is now in 4-bit mode
     switch (_type) {
         case LCD8x1:
-            writeCommand(0x20); // Function set 001 BW N F - -
-                                //   N=0 (1 line)
-                                //   F=0 (5x7 dots font)
+            _writeCommand(0x20); // Function set 001 BW N F - -
+                                 //   N=0 (1 line)
+                                 //   F=0 (5x7 dots font)
             break;                                
             
         case LCD24x4:
             // Special mode for KS0078
-            writeCommand(0x2A); // Function set 001 BW N RE DH REV
-                                //    N=1  (Dont care for KS0078)
-                                //   RE=0  (Extended Regs, special mode for KS0078)
-                                //   DH=1  (Disp shift, special mode for KS0078)                                
-                                //   REV=0 (Reverse, special mode for KS0078)
+            _writeCommand(0x2A); // Function set 001 BW N RE DH REV
+                                 //    N=1  (Dont care for KS0078)
+                                 //   RE=0  (Extended Regs, special mode for KS0078)
+                                 //   DH=1  (Disp shift, special mode for KS0078)                                
+                                 //   REV=0 (Reverse, special mode for KS0078)
 
-            writeCommand(0x2E); // Function set 001 BW N RE DH REV
-                                //    N=1  (Dont care for KS0078)
-                                //   RE=1  (Ena Extended Regs, special mode for KS0078)
-                                //   DH=1  (Disp shift, special mode for KS0078)                                
-                                //   REV=0 (Reverse, special mode for KS0078)
+            _writeCommand(0x2E); // Function set 001 BW N RE DH REV
+                                 //    N=1  (Dont care for KS0078)
+                                 //   RE=1  (Ena Extended Regs, special mode for KS0078)
+                                 //   DH=1  (Disp shift, special mode for KS0078)                                
+                                 //   REV=0 (Reverse, special mode for KS0078)
 
-            writeCommand(0x09); // Ext Function set 0000 1 FW BW NW
-                                //   FW=0  (5-dot font, special mode for KS0078)
-                                //   BW=0  (Cur BW invert disable, special mode for KS0078)
-                                //   NW=1  (4 Line, special mode for KS0078)                                
+            _writeCommand(0x09); // Ext Function set 0000 1 FW BW NW
+                                 //   FW=0  (5-dot font, special mode for KS0078)
+                                 //   BW=0  (Cur BW invert disable, special mode for KS0078)
+                                 //   NW=1  (4 Line, special mode for KS0078)                                
 
-            writeCommand(0x2A); // Function set 001 BW N RE DH REV
-                                //    N=1  (Dont care for KS0078)
-                                //   RE=0  (Dis. Extended Regs, special mode for KS0078)
-                                //   DH=1  (Disp shift, special mode for KS0078)                                
-                                //   REV=0 (Reverse, special mode for KS0078)
+            _writeCommand(0x2A); // Function set 001 BW N RE DH REV
+                                 //    N=1  (Dont care for KS0078)
+                                 //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                 //   DH=1  (Disp shift, special mode for KS0078)                                
+                                 //   REV=0 (Reverse, special mode for KS0078)
             break;
                                             
         default:
-            writeCommand(0x28); // Function set 001 BW N F - -
-                                //   N=1 (2 lines)
-                                //   F=0 (5x7 dots font)
+            _writeCommand(0x28); // Function set 001 BW N F - -
+                                 //   N=1 (2 lines)
+                                 //   F=0 (5x7 dots font)
+                                 //    -  (Don't care)                                
             
             break;
     }
 
-    writeCommand(0x06); // Entry Mode 0000 01 CD S 
-                        //   Cursor Direction and Display Shift
-                        //   CD=1 (Cur incr)
-                        //   S=0  (No display shift)                        
+    _writeCommand(0x06); // Entry Mode 0000 01 CD S 
+                         //   Cursor Direction and Display Shift
+                         //   CD=1 (Cur incr)
+                         //   S=0  (No display shift)                        
 
-//    writeCommand(0x0C); // Display Ctrl 0000 1 D C B
-//                        //   Display On, Cursor Off, Blink Off
-    cursor(TextLCD::CurOff_BlkOff);  
+//    _writeCommand(0x0C); // Display Ctrl 0000 1 D C B
+//                         //   Display On, Cursor Off, Blink Off
+    setCursor(TextLCD::CurOff_BlkOff);  
     
     cls();    
 }
 
 
-void TextLCD::character(int column, int row, int c) {
+void TextLCD::_character(int column, int row, int c) {
     int addr = getAddress(column, row);
     
-    writeCommand(0x80 | addr);
-    writeData(c);
+    _writeCommand(0x80 | addr);
+    _writeData(c);
 }
 
 
 void TextLCD::cls() {
-    writeCommand(0x01); // cls, and set cursor to 0
-    wait(0.00164f);     // This command takes 1.64 ms
+    _writeCommand(0x01); // cls, and set cursor to 0
+    wait(0.00164f);      // This command takes 1.64 ms
     locate(0, 0);
 }
 
@@ -124,7 +161,7 @@ int TextLCD::_putc(int value) {
             _row = 0;
         }
     } else {
-        character(_column, _row, value);
+        _character(_column, _row, value);
         _column++;
         if (_column >= columns()) {
             _column = 0;
@@ -141,27 +178,135 @@ int TextLCD::_getc() {
     return -1;
 }
 
-void TextLCD::writeByte(int value) {
-    _d = value >> 4;
+
+void TextLCD::_setEnable(bool value) {
+
+  switch(_busType) {
+    case _PinBus : 
+                    if (value)
+                      _e  = 1;    // Set E bit 
+                    else  
+                      _e  = 0;    // Reset E bit  
+
+                    break;  
+    
+    case _I2CBus : 
+                    if (value)
+                      _lcd_bus |= D_LCD_E;     // Set E bit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+
+                    // write the new data to the portexpander
+                    _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+                   
+                   break;  
+    
+    case _SPIBus :
+                   break;
+  }
+}    
+
+void TextLCD::_setRS(bool value) {
+
+  switch(_busType) {
+    case _PinBus : 
+                    if (value)
+                      _rs  = 1;    // Set RS bit 
+                    else  
+                      _rs  = 0;    // Reset RS bit 
+
+                    break;  
+    
+    case _I2CBus : 
+                    if (value)
+                      _lcd_bus |= D_LCD_RS;    // Set RS bit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+
+                    // write the new data to the portexpander
+                    _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+                   
+                   break;
+                       
+    case _SPIBus :
+                   break;
+  }
+
+}    
+
+void TextLCD::_setData(int value) {
+  int data;
+  
+  switch(_busType) {
+    case _PinBus : 
+                    _d = value & 0x0F;   // Write Databits 
+
+                    break;  
+    
+    case _I2CBus : 
+                    data = value & 0x0F;
+                    if (data & 0x01)
+                      _lcd_bus |= D_LCD_D4;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
+
+                    if (data & 0x02)
+                      _lcd_bus |= D_LCD_D5;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+
+                    if (data & 0x04)
+                      _lcd_bus |= D_LCD_D6;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+
+                    if (data & 0x08)
+                      _lcd_bus |= D_LCD_D7;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
+                    
+                    // write the new data to the portexpander
+                    _i2c->write(_slaveAddress, &_lcd_bus, 1);  
+                   
+                    break;                    
+                    
+    case _SPIBus :
+                    break;
+  }
+
+}    
+
+
+
+void TextLCD::_writeByte(int value) {
+//    _d = value >> 4;
+    _setData(value >> 4);
     wait(0.000040f); // most instructions take 40us
-    _e = 0;
+//    _e = 0;
+    _setEnable(false);
     wait(0.000040f);
-    _e = 1;
-    _d = value >> 0;
+//    _e = 1;
+    _setEnable(true);        
+//    _d = value >> 0;
+    _setData(value >> 0);    
     wait(0.000040f);
-    _e = 0;
+//    _e = 0;
+    _setEnable(false);    
     wait(0.000040f);  // most instructions take 40us
-    _e = 1;
+//    _e = 1;
+    _setEnable(true);    
 }
 
-void TextLCD::writeCommand(int command) {
-    _rs = 0;
-    writeByte(command);
+void TextLCD::_writeCommand(int command) {
+//    _rs = 0;
+    _setRS(false);        
+    _writeByte(command);
 }
 
-void TextLCD::writeData(int data) {
-    _rs = 1;
-    writeByte(data);
+void TextLCD::_writeData(int data) {
+//    _rs = 1;
+    _setRS(true);            
+    _writeByte(data);
 }
 
 
@@ -170,7 +315,7 @@ void TextLCD::writeData(int data) {
 // It is confusing since it returns the memoryaddress or-ed with the set memorycommand 0x80.
 // Left it in here for compatibility with older code. New applications should use getAddress() instead.
 // 
-int TextLCD::address(int column, int row) {
+int TextLCD::_address(int column, int row) {
     switch (_type) {
         case LCD20x4:
             switch (row) {
@@ -196,7 +341,7 @@ int TextLCD::address(int column, int row) {
 
 // This replaces the original method.
 // Left it in here for compatibility with older code. New applications should use getAddress() instead.
-int TextLCD::address(int column, int row) {
+int TextLCD::_address(int column, int row) {
   return 0x80 | getAddress(column, row);
 }
 
@@ -208,6 +353,13 @@ int TextLCD::getAddress(int column, int row) {
         case LCD8x1:
             return 0x00 + column;                        
     
+        case LCD16x1:
+            // LCD16x1 is a special layout of LCD8x2
+            if (column<8) 
+              return 0x00 + column;                        
+            else   
+              return 0x40 + (column - 8);                        
+
         case LCD16x4:
             switch (row) {
                 case 0:
@@ -263,7 +415,7 @@ int TextLCD::getAddress(int column, int row) {
 }
 
 
-// Added for consistency. Set row, colum and update memoryaddress.
+// Added for consistency. Set row, column and update memoryaddress.
 //
 void TextLCD::setAddress(int column, int row) {
 
@@ -271,7 +423,7 @@ void TextLCD::setAddress(int column, int row) {
     
     int addr = getAddress(column, row);
     
-    writeCommand(0x80 | addr);
+    _writeCommand(0x80 | addr);
 }
 
 int TextLCD::columns() {
@@ -280,6 +432,7 @@ int TextLCD::columns() {
         case LCD8x2:
             return 8;
 
+        case LCD16x1:        
         case LCD16x2:
         case LCD16x2B:
         case LCD16x4:        
@@ -305,6 +458,7 @@ int TextLCD::columns() {
 int TextLCD::rows() {
     switch (_type) {
         case LCD8x1: 
+        case LCD16x1:         
             return 1;           
 
         case LCD8x2:        
@@ -327,25 +481,25 @@ int TextLCD::rows() {
 }
 
 
-void TextLCD::cursor(TextLCD::LCDCursor show) { 
+void TextLCD::setCursor(TextLCD::LCDCursor show) { 
     
     switch (show) {
-      case CurOff_BlkOff : writeCommand(0x0C); // Cursor off and Blink Off
+      case CurOff_BlkOff : _writeCommand(0x0C); // Cursor off and Blink Off
                            wait_us(40);
                            _cursor = show;
                            break;
 
-      case CurOn_BlkOff   : writeCommand(0x0E); // Cursor on and Blink Off
+      case CurOn_BlkOff   : _writeCommand(0x0E); // Cursor on and Blink Off
                            wait_us(40);  
                            _cursor = show;
                            break;
 
-      case CurOff_BlkOn :  writeCommand(0x0D); // Cursor off and Blink On
+      case CurOff_BlkOn :  _writeCommand(0x0D); // Cursor off and Blink On
                            wait_us(40);
                            _cursor = show;
                            break;
 
-      case CurOn_BlkOn   : writeCommand(0x0F); // Cursor on and Blink char
+      case CurOn_BlkOn   : _writeCommand(0x0F); // Cursor on and Blink char
                            wait_us(40);  
                            _cursor = show;
                            break;
@@ -360,10 +514,10 @@ void TextLCD::cursor(TextLCD::LCDCursor show) {
 
 
 void TextLCD::setUDC(unsigned char c, char *udc_data) {
-  writeCommand(0x40 + ((c & 0x07) << 3)); //Set CG-RAM address
+  _writeCommand(0x40 + ((c & 0x07) << 3)); //Set CG-RAM address
 
   for (int i=0; i<8; i++) {
-    writeData(*udc_data++);
+    _writeData(*udc_data++);
   }
 }
 
