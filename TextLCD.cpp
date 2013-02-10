@@ -1,6 +1,7 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford, http://mbed.org
- *               2013, WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs
+ *               2013, v01: WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
+ *               2013, v02: WH, Added I2C and SPI bus interfaces  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +29,7 @@ TextLCD::TextLCD(PinName rs, PinName e,
                  PinName d4, PinName d5, PinName d6, PinName d7,
                  LCDType type): _rs(rs), _e(e),
                                 _d(d4, d5, d6, d7),
+                                _cs(NC),                                                
                                 _type(type) {
 
 
@@ -40,6 +42,7 @@ TextLCD::TextLCD(PinName rs, PinName e,
 
 TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type) :
         _rs(NC), _e(NC), _d(NC),
+        _cs(NC),                
         _i2c(i2c),
         _type(type) {
         
@@ -57,7 +60,36 @@ TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type) :
     
 }
 
-/** Init the LCD controller
+
+TextLCD::TextLCD(SPI *spi, PinName cs, LCDType type) :
+        _rs(NC), _e(NC), _d(NC),
+        _spi(spi),
+        _cs(cs),        
+        _type(type) {
+        
+  _busType = _SPIBus;
+
+  // Setup the spi for 8 bit data, low steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+  _spi->format(8,0);
+  _spi->frequency(500000);    
+  //_spi.frequency(1000000);    
+
+
+  // Init the portexpander bus
+  _lcd_bus = 0x80;
+  
+  // write the new data to the portexpander
+  _setCS(false);  
+  _spi->write(_lcd_bus);   
+  _setCS(true);  
+  
+  _init();
+    
+}
+
+
+/*  Init the LCD controller
  *  4-bit mode, number of lines, no cursor etc
  *  Clear display 
  */
@@ -68,16 +100,19 @@ void TextLCD::_init() {
     _setEnable(true);    
     _setRS(false);      // command mode
     
-    wait(0.015);        // Wait 15ms to ensure powered up
+//    wait(0.015);        // Wait 15ms to ensure powered up
+    wait_ms(15);        // Wait 15ms to ensure powered up
 
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)
     for (int i=0; i<3; i++) {
         _writeByte(0x3);
-        wait(0.00164);  // this command takes 1.64ms, so wait for it
+//        wait(0.00164);  // this command takes 1.64ms, so wait for it
+        wait_ms(10);    // this command takes 1.64ms, so wait for it 
     }
     _writeByte(0x2);     // 4-bit mode
-    wait(0.000040f);     // most instructions take 40us
-
+//    wait(0.000040f);     // most instructions take 40us
+    wait_us(40);         // most instructions take 40us
+    
     // Display is now in 4-bit mode
     switch (_type) {
         case LCD8x1:
@@ -144,7 +179,9 @@ void TextLCD::_character(int column, int row, int c) {
 
 void TextLCD::cls() {
     _writeCommand(0x01); // cls, and set cursor to 0
-    wait(0.00164f);      // This command takes 1.64 ms
+//    wait(0.00164f);      // This command takes 1.64 ms
+    wait_ms(10);     // The CLS command takes 1.64 ms.
+                     // Since we are not using the Busy flag, Lets be safe and take 10 ms
     locate(0, 0);
 }
 
@@ -191,17 +228,27 @@ void TextLCD::_setEnable(bool value) {
                     break;  
     
     case _I2CBus : 
-                    if (value)
-                      _lcd_bus |= D_LCD_E;     // Set E bit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+                   if (value)
+                     _lcd_bus |= D_LCD_E;     // Set E bit 
+                   else                     
+                     _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
 
-                    // write the new data to the portexpander
-                    _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+                   // write the new data to the portexpander
+                   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
                    
                    break;  
     
     case _SPIBus :
+                   if (value)
+                     _lcd_bus |= D_LCD_E;     // Set E bit 
+                   else                     
+                     _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+         
+                   // write the new data to the portexpander
+                   _setCS(false);  
+                   _spi->write(_lcd_bus);   
+                   _setCS(true);  
+  
                    break;
   }
 }    
@@ -218,17 +265,27 @@ void TextLCD::_setRS(bool value) {
                     break;  
     
     case _I2CBus : 
-                    if (value)
-                      _lcd_bus |= D_LCD_RS;    // Set RS bit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+                   if (value)
+                     _lcd_bus |= D_LCD_RS;    // Set RS bit 
+                   else                     
+                     _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
 
-                    // write the new data to the portexpander
-                    _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+                   // write the new data to the portexpander
+                   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
                    
                    break;
                        
     case _SPIBus :
+                   if (value)
+                     _lcd_bus |= D_LCD_RS;    // Set RS bit 
+                   else                     
+                     _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+      
+                   // write the new data to the portexpander
+                   _setCS(false);  
+                   _spi->write(_lcd_bus);   
+                   _setCS(true);  
+     
                    break;
   }
 
@@ -271,28 +328,70 @@ void TextLCD::_setData(int value) {
                     break;                    
                     
     case _SPIBus :
-                    break;
+    
+                    data = value & 0x0F;
+                    if (data & 0x01)
+                      _lcd_bus |= D_LCD_D4;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
+
+                    if (data & 0x02)
+                      _lcd_bus |= D_LCD_D5;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+
+                    if (data & 0x04)
+                      _lcd_bus |= D_LCD_D6;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+
+                    if (data & 0x08)
+                      _lcd_bus |= D_LCD_D7;   // Set Databit 
+                    else                     
+                      _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
+                    
+                   // write the new data to the portexpander
+                   _setCS(false);  
+                   _spi->write(_lcd_bus);   
+                   _setCS(true);  
+        
+                   break;
   }
 
 }    
+
+
+// Set CS line. Only used for SPI bus
+void TextLCD::_setCS(bool value) {
+
+  if (value)
+    _cs  = 1;    // Set CS pin 
+  else  
+    _cs  = 0;    // Reset CS pin 
+
+}
 
 
 
 void TextLCD::_writeByte(int value) {
 //    _d = value >> 4;
     _setData(value >> 4);
-    wait(0.000040f); // most instructions take 40us
+//    wait(0.000040f); // most instructions take 40us
+    wait_us(40); // most instructions take 40us    
 //    _e = 0;
     _setEnable(false);
-    wait(0.000040f);
+//    wait(0.000040f);
+    wait_us(40); // most instructions take 40us        
 //    _e = 1;
     _setEnable(true);        
 //    _d = value >> 0;
     _setData(value >> 0);    
-    wait(0.000040f);
+//    wait(0.000040f);
+    wait_us(40); // most instructions take 40us        
 //    _e = 0;
     _setEnable(false);    
-    wait(0.000040f);  // most instructions take 40us
+//    wait(0.000040f);  // most instructions take 40us
+    wait_us(40); // most instructions take 40us        
 //    _e = 1;
     _setEnable(true);    
 }

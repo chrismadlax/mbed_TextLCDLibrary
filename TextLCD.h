@@ -166,7 +166,7 @@ public:
      * @param cs              chip select pin (active low)
      * @param type            Sets the panel size/addressing mode (default = LCD16x2)
      */
-//    TextLCD(SPI *spi, PinName cs, LCDType type = LCD16x2);
+    TextLCD(SPI *spi, PinName cs, LCDType type = LCD16x2);
 
 
 #if DOXYGEN_ONLY
@@ -239,11 +239,11 @@ public:
     void setUDC(unsigned char c, char *udc_data);
 
 protected:
-   /** LCD Bus control */
+   /* LCD Bus control */
     enum _LCDBus {
-        _PinBus,  /**<  Regular mbed pins */    
-        _I2CBus,  /**<  I2C PCF8574 Portexpander */    
-        _SPIBus   /**<  SPI 74595 */    
+        _PinBus,  /*<  Regular mbed pins */    
+        _I2CBus,  /*<  I2C PCF8574 Portexpander */    
+        _SPIBus   /*<  SPI 74595 */    
     };
 
     // Stream implementation functions
@@ -258,7 +258,8 @@ protected:
     void _setEnable(bool value);
     void _setRS(bool value);  
     void _setData(int value);
-
+    void _setCS(bool value);
+    
 //Low level writes to LCD serial bus only
     void _writeBus();      
 
@@ -276,8 +277,8 @@ protected:
     unsigned char _slaveAddress;
     
 // SPI bus        
-//    SPI *_spi;
-//    DigitalOut _cs;    
+    SPI *_spi;
+    DigitalOut _cs;    
     
 //Bus Interface type    
     _LCDBus _busType;
