@@ -1,7 +1,8 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2007-2010, sford, http://mbed.org
  *               2013, v01: WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
- *               2013, v02: WH, Added I2C and SPI bus interfaces 
+ *               2013, v02: WH, Added I2C and SPI bus interfaces
+ *               2013, v03: WH, Added support for LCD40x4 which uses 2 controllers   
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,15 +28,20 @@
 
 #include "mbed.h"
 
+
+//Test Only
+//#define LCD40x4Test 0
+#define LCD40x4Test 1
+
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4 and 40x2 panels
+ * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4 and 40x2 panels
  *
  * @code
  * #include "mbed.h"
  * #include "TextLCD.h"
  * 
- * TextLCD lcd(p15, p16, p17, p18, p19, p20); // RS, E, D4-D7 
+ * TextLCD lcd(p15, p16, p17, p18, p19, p20); // RS, E, D4-D7, LCDType=LCD16x2
  * 
  * int main() {
  *     lcd.printf("Hello World!\n");
@@ -47,19 +53,20 @@
 //Pin Defines for I2C PCF8574 and SPI 74595 Bus
 //LCD and serial portexpanders should be wired accordingly 
 //Note: LCD RW pin must be connected to GND
-//      E2 may be used for future expansion to LCD40x4
+//      E2 is used for LCD40x4 (second controller)
 //      BL may be used for future expansion to control backlight
 //
-#define D_LCD_PIN_D4   0x00
-#define D_LCD_PIN_D5   0x01
-#define D_LCD_PIN_D6   0x02
-#define D_LCD_PIN_D7   0x03
-#define D_LCD_PIN_RS   0x04
-#define D_LCD_PIN_E    0x05
-#define D_LCD_PIN_E2   0x06
-#define D_LCD_PIN_BL   0x07
+#define D_LCD_PIN_D4   0
+#define D_LCD_PIN_D5   1
+#define D_LCD_PIN_D6   2
+#define D_LCD_PIN_D7   3
+#define D_LCD_PIN_RS   4
+#define D_LCD_PIN_E    5
+#define D_LCD_PIN_E2   6
+#define D_LCD_PIN_BL   7
 
 #define D_LCD_BUS_MSK  0x0F
+#define D_LCD_BUS_DEF  0x00
 
 //Bitpattern Defines for I2C PCF8574 and SPI 74595 Bus
 //
@@ -112,7 +119,7 @@ const char udc_bar_5[]  = {0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // 
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4 and 40x2 panels
+ * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
  *
  */
 class TextLCD : public Stream {
@@ -122,6 +129,8 @@ public:
     enum LCDType {
         LCD8x1,     /**<  8x1 LCD panel */    
         LCD8x2,     /**<  8x2 LCD panel */          
+        LCD12x2,    /**< 12x2 LCD panel */                          
+        LCD12x4,    /**< 12x4 LCD panel */                  
         LCD16x1,    /**< 16x1 LCD panel (actually 8x2) */          
         LCD16x2,    /**< 16x2 LCD panel (default) */
         LCD16x2B,   /**< 16x2 LCD panel alternate addressing */
@@ -130,7 +139,8 @@ public:
         LCD20x4,    /**< 20x4 LCD panel */
         LCD24x2,    /**< 24x2 LCD panel */        
         LCD24x4,    /**< 24x4 LCD panel, special mode KS0078 */                
-        LCD40x2     /**< 40x2 LCD panel */                
+        LCD40x2,    /**< 40x2 LCD panel */                
+        LCD40x4     /**< 40x4 LCD panel, Two controller version */                        
     };
 
     /** LCD Cursor control */
@@ -142,14 +152,15 @@ public:
     };
 
 
-    /** Create a TextLCD interface for using regural mbed pins
+    /** Create a TextLCD interface for using regular mbed pins
      *
      * @param rs    Instruction/data control line
      * @param e     Enable line (clock)
      * @param d4-d7 Data lines for using as a 4-bit interface
      * @param type  Sets the panel size/addressing mode (default = LCD16x2)
+     * @param e2    Enable2 line (clock for second controller, LCD40x4 only)      
      */
-    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2);
+    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName e2 = NC);
     
     /** Create a TextLCD interface using an I2C PC8574 portexpander
      *
@@ -243,17 +254,32 @@ protected:
     enum _LCDBus {
         _PinBus,  /*<  Regular mbed pins */    
         _I2CBus,  /*<  I2C PCF8574 Portexpander */    
-        _SPIBus   /*<  SPI 74595 */    
+        _SPIBus   /*<  SPI 74595 Shiftregister */    
     };
 
+   /* LCD controller select, mainly used for LCD40x4 */
+    enum _LCDCtrl {
+        _LCDCtrl_0,  /*<  Primary */    
+        _LCDCtrl_1,  /*<  Secondary */            
+    };
+    
     // Stream implementation functions
     virtual int _putc(int value);
     virtual int _getc();
 
+//Low level methods for LCD controller
     void _init();    
+    void _initCtrl();    
     int  _address(int column, int row);
     void _character(int column, int row, int c);
+    void _setCursor(TextLCD::LCDCursor show);
+    void _setUDC(unsigned char c, char *udc_data);     
     
+//Low level write operations to LCD controller
+    void _writeByte(int value);
+    void _writeCommand(int command);
+    void _writeData(int data);
+
 //Low level writes to LCD Bus (serial or parallel)
     void _setEnable(bool value);
     void _setRS(bool value);  
@@ -263,13 +289,9 @@ protected:
 //Low level writes to LCD serial bus only
     void _writeBus();      
 
-//Low level writes to LCD
-    void _writeByte(int value);
-    void _writeCommand(int command);
-    void _writeData(int data);
   
 // Regular mbed pins bus
-    DigitalOut _rs, _e;
+    DigitalOut _rs, _e, _e2;
     BusOut _d;
     
 // I2C bus    
@@ -283,16 +305,19 @@ protected:
 //Bus Interface type    
     _LCDBus _busType;
 
-// Internal bus mirror value for serial only
+// Internal bus mirror value for serial bus only
     char _lcd_bus;   
     
 //Display type
     LCDType _type;
 
+//Controller select, mainly used for LCD40x4 
+    _LCDCtrl _ctrl;    
+
 // Cursor
     int _column;
     int _row;
-    LCDCursor _cursor;    
+    LCDCursor _currentCursor;    
 };
 
 #endif
