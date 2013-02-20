@@ -220,8 +220,7 @@ void TextLCD::_initCtrl() {
 }
 
 
- 
-#if(LCD40x4Test)
+// Clear the screen, Cursor home. 
 void TextLCD::cls() {
 
   // Select and configure second LCD controller when needed
@@ -256,17 +255,7 @@ void TextLCD::cls() {
   _column=0;
 }
 
-#else
-//standard
-void TextLCD::cls() {
-    _writeCommand(0x01); // cls, and set cursor to 0
-
-    wait_ms(10);     // The CLS command takes 1.64 ms.
-                     // Since we are not using the Busy flag, Lets be safe and take 10 ms
-    locate(0, 0);
-}
-#endif
-
+// Move cursor to selected row and column
 void TextLCD::locate(int column, int row) {
     
    // setAddress() does all the heavy lifting:
@@ -279,17 +268,7 @@ void TextLCD::locate(int column, int row) {
 }
     
 
-//Not needed in new version, is now part of _putc()
-void TextLCD::_character(int column, int row, int c) {
-  int addr = getAddress(column, row);
-    
-  _writeCommand(0x80 | addr);
-  _writeData(c);
-}
-
-
-#if(LCD40x4Test)
-
+// Write a single character (Stream implementation)
 int TextLCD::_putc(int value) {
   int addr;
     
@@ -324,46 +303,19 @@ int TextLCD::_putc(int value) {
             
     return value;
 }
-#else
-//Standard
-int TextLCD::_putc(int value) {
-    if (value == '\n') {
-        _column = 0;
-        _row++;
-        if (_row >= rows()) {
-            _row = 0;
-        }
-    } else {
-        _character(_column, _row, value);
-        _column++;
-        if (_column >= columns()) {
-            _column = 0;
-            _row++;
-            if (_row >= rows()) {
-                _row = 0;
-            }
-        }
-    }
-       
-    return value;
-}
-
-#endif
 
 
-
-
-
+// get a single character (Stream implementation)
 int TextLCD::_getc() {
     return -1;
 }
 
-
+// Set E pin (or E2 pin)
+// Used for mbed pins, I2C bus expander or SPI shifregister
 void TextLCD::_setEnable(bool value) {
 
   switch(_busType) {
     case _PinBus : 
-#if(LCD40x4Test)
                     if(_ctrl==TextLCD::_LCDCtrl_0) {
                       if (value)
                         _e  = 1;    // Set E bit 
@@ -377,17 +329,10 @@ void TextLCD::_setEnable(bool value) {
                         _e2 = 0;    // Reset E2 bit  
                     }    
 
-#else
-                    if (value)
-                      _e  = 1;    // Set E bit 
-                    else  
-                      _e  = 0;    // Reset E bit  
-#endif
                     break;  
     
     case _I2CBus : 
     
-#if(LCD40x4Test)
                    if(_ctrl==TextLCD::_LCDCtrl_0) {
                      if (value)
                        _lcd_bus |= D_LCD_E;     // Set E bit 
@@ -401,20 +346,12 @@ void TextLCD::_setEnable(bool value) {
                        _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
                    }    
 
-#else
-                   if (value)
-                     _lcd_bus |= D_LCD_E;     // Set E bit 
-                   else                     
-                     _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
-
-#endif                   
                    // write the new data to the I2C portexpander
                    _i2c->write(_slaveAddress, &_lcd_bus, 1);    
 
                    break;  
     
     case _SPIBus :
-#if(LCD40x4Test)
                    if(_ctrl==TextLCD::_LCDCtrl_0) {
                      if (value)
                        _lcd_bus |= D_LCD_E;     // Set E bit 
@@ -428,13 +365,6 @@ void TextLCD::_setEnable(bool value) {
                        _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
                    }
                   
-#else    
-                   if (value)
-                     _lcd_bus |= D_LCD_E;     // Set E bit 
-                   else                     
-                     _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
-#endif         
-
                    // write the new data to the SPI portexpander
                    _setCS(false);  
                    _spi->write(_lcd_bus);   
@@ -444,6 +374,8 @@ void TextLCD::_setEnable(bool value) {
   }
 }    
 
+// Set RS pin
+// Used for mbed pins, I2C bus expander or SPI shifregister
 void TextLCD::_setRS(bool value) {
 
   switch(_busType) {
@@ -482,6 +414,8 @@ void TextLCD::_setRS(bool value) {
 
 }    
 
+// Place the 4bit data on the databus
+// Used for mbed pins, I2C bus expander or SPI shifregister
 void TextLCD::_setData(int value) {
   int data;
   
@@ -552,7 +486,8 @@ void TextLCD::_setData(int value) {
 }    
 
 
-// Set CS line. Only used for SPI bus
+// Set CS line.
+// Only used for SPI bus
 void TextLCD::_setCS(bool value) {
 
   if (value) {   
@@ -564,18 +499,19 @@ void TextLCD::_setCS(bool value) {
 }
 
 
-
+// Write a byte using the 4-bit interface
+// Used for mbed pins, I2C bus expander or SPI shifregister
 void TextLCD::_writeByte(int value) {
 
 // Enable is Low
     _setEnable(true);          
-    _setData(value >> 4);   
+    _setData(value >> 4);   // High nibble
     wait_us(1); // Data setup time    
     _setEnable(false);   
     wait_us(1); // Data hold time
     
     _setEnable(true);        
-    _setData(value >> 0);    
+    _setData(value >> 0);   // Low nibble
     wait_us(1); // Data setup time        
     _setEnable(false);    
     wait_us(1); // Datahold time
@@ -587,7 +523,7 @@ void TextLCD::_writeByte(int value) {
 void TextLCD::_writeCommand(int command) {
 
     _setRS(false);        
-    wait_us(1);  // Data setup time            
+    wait_us(1);  // Data setup time for RS       
     
     _writeByte(command);   
     wait_us(40); // most instructions take 40us            
@@ -596,7 +532,7 @@ void TextLCD::_writeCommand(int command) {
 void TextLCD::_writeData(int data) {
 
     _setRS(true);            
-    wait_us(1);  // Data setup time        
+    wait_us(1);  // Data setup time for RS 
         
     _writeByte(data);
     wait_us(40); // data writes take 40us                
@@ -604,7 +540,7 @@ void TextLCD::_writeData(int data) {
 
 
 #if (0)
-// This is the original method.
+// This is the original _address() method.
 // It is confusing since it returns the memoryaddress or-ed with the set memorycommand 0x80.
 // Left it in here for compatibility with older code. New applications should use getAddress() instead.
 // 
@@ -632,7 +568,7 @@ int TextLCD::_address(int column, int row) {
 #endif
 
 
-// This replaces the original method.
+// This replaces the original _address() method.
 // Left it in here for compatibility with older code. New applications should use getAddress() instead.
 int TextLCD::_address(int column, int row) {
   return 0x80 | getAddress(column, row);
@@ -714,7 +650,6 @@ int TextLCD::getAddress(int column, int row) {
         case LCD40x2:                
             return 0x00 + (row * 0x40) + column;
 
-#if(LCD40x4Test)
         case LCD40x4:                
           // LCD40x4 is a special case since it has 2 controllers
           // Each controller is configured as 40x2
@@ -749,8 +684,6 @@ int TextLCD::getAddress(int column, int row) {
                                    
             return 0x00 + ((row-2) * 0x40) + column;          
           } 
-          
-#endif
             
 // Should never get here.
         default:            
@@ -813,10 +746,7 @@ int TextLCD::columns() {
             return 24;        
 
         case LCD40x2:
-
-#if(LCD40x4Test)
         case LCD40x4:
-#endif        
             return 40;        
         
 // Should never get here.
@@ -844,9 +774,7 @@ int TextLCD::rows() {
         case LCD16x4:
         case LCD20x4:
         case LCD24x4:        
-#if(LCD40x4Test)
         case LCD40x4:
-#endif        
             return 4;
 
 // Should never get here.      
@@ -855,9 +783,6 @@ int TextLCD::rows() {
     }
 }
 
-
-
-#if(LCD40x4Test)
 
 void TextLCD::setCursor(TextLCD::LCDCursor show) { 
 
@@ -888,42 +813,11 @@ void TextLCD::_setCursor(TextLCD::LCDCursor show) {
 // Should never get here.
       default : 
                            break;
-                      
+                     
     }
-
 }
 
-#else
-//standard
-void TextLCD::setCursor(TextLCD::LCDCursor show) { 
-    
-    switch (show) {
-      case CurOff_BlkOff : _writeCommand(0x0C); // Cursor off and Blink Off
-                           break;
 
-      case CurOn_BlkOff  : _writeCommand(0x0E); // Cursor on and Blink Off
-                           break;
-
-      case CurOff_BlkOn :  _writeCommand(0x0D); // Cursor off and Blink On
-                           break;
-
-      case CurOn_BlkOn   : _writeCommand(0x0F); // Cursor on and Blink char
-                           break;
-
-// Should never get here.
-      default : 
-                           break;
-                      
-    }
-
-}
-
-#endif
-
-
-
-
-#if(LCD40x4Test)
 void TextLCD::setUDC(unsigned char c, char *udc_data) {
   
   // Select and configure second LCD controller when needed
@@ -967,22 +861,3 @@ void TextLCD::_setUDC(unsigned char c, char *udc_data) {
   _writeCommand(0x80 | addr);
   
 }
-
-#else
-//standard
-void TextLCD::setUDC(unsigned char c, char *udc_data) {
-  // Select CG RAM for current LCD controller
-  _writeCommand(0x40 + ((c & 0x07) << 3)); //Set CG-RAM address
-                                           //8 sequential locations needed per UDC
-  // Store UDC pattern 
-  for (int i=0; i<8; i++) {
-    _writeData(*udc_data++);
-  }
-  
-  //Select DD RAM again for current LCD controller
-  addr = getAddress(_column, _row);
-  _writeCommand(0x80 | addr);
-  
-}
-
-#endif
