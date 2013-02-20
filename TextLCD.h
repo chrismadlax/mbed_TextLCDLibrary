@@ -29,28 +29,33 @@
 #include "mbed.h"
 
 
-//Test Only
-//#define LCD40x4Test 0
-#define LCD40x4Test 1
-
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4 and 40x2 panels
+ * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
+ * Interface options include direct mbed pins, I2C portexpander (PCF8474) or SPI bus shiftregister (74595)
  *
  * @code
  * #include "mbed.h"
  * #include "TextLCD.h"
  * 
- * TextLCD lcd(p15, p16, p17, p18, p19, p20); // RS, E, D4-D7, LCDType=LCD16x2
+ * // I2C Communication
+ * I2C i2c_lcd(p28,p27); // SDA, SCL
+ *
+ * // SPI Communication
+ * SPI spi_lcd(p5, NC, p7); // MOSI, MISO, SCLK
+ *
+ * TextLCD lcd(p15, p16, p17, p18, p19, p20);     // RS, E, D4-D7, LCDType=LCD16x2
+ * //TextLCD lcd(&spi_lcd, p8, TextLCD::LCD40x4);   // SPI bus, CS pin, LCD Type  
+ * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4); // I2C bus, PCF8574 Slaveaddress, LCD Type
  * 
  * int main() {
- *     lcd.printf("Hello World!\n");
+ *   lcd.printf("Hello World!\n");
  * }
  * @endcode
  */
 
 
-//Pin Defines for I2C PCF8574 and SPI 74595 Bus
+//Pin Defines for I2C PCF8574 and SPI 74595 Bus interfaces
 //LCD and serial portexpanders should be wired accordingly 
 //Note: LCD RW pin must be connected to GND
 //      E2 is used for LCD40x4 (second controller)
@@ -119,7 +124,7 @@ const char udc_bar_5[]  = {0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // 
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
+ * Currently supports 8x1, 8x2, 12x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
  *
  */
 class TextLCD : public Stream {
@@ -271,7 +276,6 @@ protected:
     void _init();    
     void _initCtrl();    
     int  _address(int column, int row);
-    void _character(int column, int row, int c);
     void _setCursor(TextLCD::LCDCursor show);
     void _setUDC(unsigned char c, char *udc_data);     
     
