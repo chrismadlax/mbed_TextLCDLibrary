@@ -3,6 +3,7 @@
  *               2013, v01: WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
  *               2013, v02: WH, Added I2C and SPI bus interfaces
  *               2013, v03: WH, Added support for LCD40x4 which uses 2 controllers   
+ *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -85,7 +86,6 @@
 #define D_LCD_BL       (1<<D_LCD_PIN_BL)
 
 
-
 /** Some sample User Defined Chars 5x7 dots */
 const char udc_ae[] = {0x00, 0x00, 0x1B, 0x05, 0x1F, 0x14, 0x1F, 0x00};  //æ
 const char udc_0e[] = {0x00, 0x00, 0x0E, 0x13, 0x15, 0x19, 0x0E, 0x00};  //ø
@@ -150,10 +150,17 @@ public:
 
     /** LCD Cursor control */
     enum LCDCursor {
-        CurOff_BlkOff,  /**<  Cursor Off, Blinking Char Off */    
-        CurOn_BlkOff,   /**<  Cursor On, Blinking Char Off */    
-        CurOff_BlkOn,   /**<  Cursor Off, Blinking Char On */    
-        CurOn_BlkOn,    /**<  Cursor On, Blinking Char On */    
+        CurOff_BlkOff = 0x00,  /**<  Cursor Off, Blinking Char Off */    
+        CurOn_BlkOff  = 0x02,  /**<  Cursor On, Blinking Char Off */    
+        CurOff_BlkOn  = 0x01,  /**<  Cursor Off, Blinking Char On */    
+        CurOn_BlkOn   = 0x03   /**<  Cursor On, Blinking Char On */    
+    };
+
+
+    /** LCD Display control */
+    enum LCDMode {
+        DispOff = 0x00,  /**<  Display Off */    
+        DispOn  = 0x04   /**<  Display On */            
     };
 
 
@@ -242,9 +249,16 @@ public:
 
     /** Set the Cursormode
      *
-     * @param show    The Cursor mode (CurOff_BlkOff, CurOn_BlkOff, CurOff_BlkOn, CurOn_BlkOn)
+     * @param cursorMode  The Cursor mode (CurOff_BlkOff, CurOn_BlkOff, CurOff_BlkOn, CurOn_BlkOn)
      */
-    void setCursor(LCDCursor show);     
+    void setCursor(LCDCursor cursorMode);     
+    
+
+    /** Set the Displaymode
+     *
+     * @param displayMode The Display mode (DispOff, DispOn)
+     */
+    void setMode(TextLCD::LCDMode displayMode);     
 
 
     /** Set User Defined Characters
@@ -277,9 +291,11 @@ protected:
     void _initCtrl();    
     int  _address(int column, int row);
     void _setCursor(TextLCD::LCDCursor show);
-    void _setUDC(unsigned char c, char *udc_data);     
+    void _setUDC(unsigned char c, char *udc_data);   
+    void _setCursorAndDisplayMode(TextLCD::LCDMode displayMode, TextLCD::LCDCursor cursorType);       
     
 //Low level write operations to LCD controller
+    void _writeNibble(int value);
     void _writeByte(int value);
     void _writeCommand(int command);
     void _writeData(int data);
@@ -314,6 +330,9 @@ protected:
     
 //Display type
     LCDType _type;
+
+//Display type
+    LCDMode _currentMode;
 
 //Controller select, mainly used for LCD40x4 
     _LCDCtrl _ctrl;    
