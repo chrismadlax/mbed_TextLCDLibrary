@@ -3,6 +3,7 @@
  *               2013, v01: WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
  *               2013, v02: WH, Added I2C and SPI bus interfaces  
  *               2013, v03: WH, Added support for LCD40x4 which uses 2 controllers 
+ *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -151,6 +152,18 @@ void TextLCD::_initCtrl() {
     
     wait_ms(20);        // Wait 20ms to ensure powered up
 
+#if(1)
+    // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)    
+    for (int i=0; i<3; i++) {
+        _writeNibble(0x3);
+        wait_ms(15);     // this command takes 1.64ms, so wait for it 
+    }
+    _writeNibble(0x2);   // 4-bit mode
+    wait_us(40);         // most instructions take 40us
+#else
+//Original code. Does not comply with specification and causes problems
+//unless used right after power-on.
+
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)
     for (int i=0; i<3; i++) {
         _writeByte(0x3);
@@ -158,6 +171,7 @@ void TextLCD::_initCtrl() {
     }
     _writeByte(0x2);     // 4-bit mode
     wait_us(40);         // most instructions take 40us
+#endif
     
     // Display is now in 4-bit mode
     switch (_type) {
@@ -214,9 +228,9 @@ void TextLCD::_initCtrl() {
                          //   S=0  (No display shift)                        
 
 //    _writeCommand(0x0C); // Display Ctrl 0000 1 D C B
-//                         //   Display On, Cursor Off, Blink Off
+//                         //   Display On, Cursor Off, Blink Off   
     setCursor(TextLCD::CurOff_BlkOff);     
-
+    setMode(TextLCD::DispOn);     
 }
 
 
@@ -228,7 +242,7 @@ void TextLCD::cls() {
     _ctrl=TextLCD::_LCDCtrl_1; // Select 2nd controller
 
     // Second LCD controller Cursor always Off
-    _setCursor(TextLCD::CurOff_BlkOff);
+    _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);
 
     // Second LCD controller Clearscreen
     _writeCommand(0x01); // cls, and set cursor to 0    
@@ -248,7 +262,7 @@ void TextLCD::cls() {
 
   // Restore cursormode on primary LCD controller when needed
   if(_type==LCD40x4) {
-    _setCursor(_currentCursor);
+    _setCursorAndDisplayMode(_currentMode,_currentCursor);     
   }
                    
   _row=0;          // Reset Cursor location
@@ -499,6 +513,22 @@ void TextLCD::_setCS(bool value) {
 }
 
 
+// Write a nibble using the 4-bit interface
+// Used for mbed pins, I2C bus expander or SPI shifregister
+void TextLCD::_writeNibble(int value) {
+
+// Enable is Low
+    _setEnable(true);        
+    _setData(value & 0x0F);   // Low nibble
+    wait_us(1); // Data setup time        
+    _setEnable(false);    
+    wait_us(1); // Datahold time
+
+// Enable is Low
+
+}
+
+
 // Write a byte using the 4-bit interface
 // Used for mbed pins, I2C bus expander or SPI shifregister
 void TextLCD::_writeByte(int value) {
@@ -656,14 +686,15 @@ int TextLCD::getAddress(int column, int row) {
           if (row<2) { 
             // Test to see if we need to switch between controllers  
             if (_ctrl != _LCDCtrl_0) {
+
               // Second LCD controller Cursor Off
-              _setCursor(TextLCD::CurOff_BlkOff);
+              _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);    
 
               // Select primary controller
               _ctrl = _LCDCtrl_0;
 
               // Restore cursormode on primary LCD controller
-              _setCursor(_currentCursor);
+              _setCursorAndDisplayMode(_currentMode, _currentCursor);    
             }           
             
             return 0x00 + (row * 0x40) + column;          
@@ -673,13 +704,13 @@ int TextLCD::getAddress(int column, int row) {
             // Test to see if we need to switch between controllers  
             if (_ctrl != _LCDCtrl_1) {
               // Primary LCD controller Cursor Off
-              _setCursor(TextLCD::CurOff_BlkOff);
+              _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);    
 
               // Select secondary controller
               _ctrl = _LCDCtrl_1;
 
               // Restore cursormode on secondary LCD controller
-              _setCursor(_currentCursor);
+              _setCursorAndDisplayMode(_currentMode, _currentCursor);    
             }           
                                    
             return 0x00 + ((row-2) * 0x40) + column;          
@@ -784,37 +815,66 @@ int TextLCD::rows() {
 }
 
 
-void TextLCD::setCursor(TextLCD::LCDCursor show) { 
+// Set the Cursor Mode (Cursor Off & Blink Off, Cursor On & Blink Off, Cursor Off & Blink On, Cursor On & Blink On
+void TextLCD::setCursor(TextLCD::LCDCursor cursorMode) { 
 
-  // Save new cursor mode, needed when 2 controllers are in use
-  _currentCursor = show;
+  // Save new cursor mode, needed when 2 controllers are in use or when display is switched off/on
+  _currentCursor = cursorMode;
     
-  // Configure current LCD controller
-  _setCursor(_currentCursor);
+  // Configure only current LCD controller
+  _setCursorAndDisplayMode(_currentMode, _currentCursor);
     
 }
 
-void TextLCD::_setCursor(TextLCD::LCDCursor show) { 
+// Set the Displaymode (On/Off)
+void TextLCD::setMode(TextLCD::LCDMode displayMode) { 
+
+  // Save new displayMode, needed when 2 controllers are in use or when cursor is changed
+  _currentMode = displayMode;
     
-    // Configure current LCD controller    
-    switch (show) {
-      case CurOff_BlkOff : _writeCommand(0x0C); // Cursor off and Blink Off
-                           break;
+  // Select and configure second LCD controller when needed
+  if(_type==LCD40x4) {
+    if (_ctrl==TextLCD::_LCDCtrl_0) {
+      // Configure primary LCD controller
+      _setCursorAndDisplayMode(_currentMode, _currentCursor);
 
-      case CurOn_BlkOff :  _writeCommand(0x0E); // Cursor on and Blink Off
-                           break;
+      // Select 2nd controller
+      _ctrl=TextLCD::_LCDCtrl_1;
+  
+      // Configure secondary LCD controller    
+      _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);
 
-      case CurOff_BlkOn :  _writeCommand(0x0D); // Cursor off and Blink On
-                           break;
-
-      case CurOn_BlkOn  :  _writeCommand(0x0F); // Cursor on and Blink char
-                           break;
-
-// Should never get here.
-      default : 
-                           break;
-                     
+      // Restore current controller
+      _ctrl=TextLCD::_LCDCtrl_0;       
     }
+    else {
+      // Select primary controller
+      _ctrl=TextLCD::_LCDCtrl_0;
+    
+      // Configure primary LCD controller
+      _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);
+       
+      // Restore current controller
+      _ctrl=TextLCD::_LCDCtrl_1;
+
+      // Configure secondary LCD controller    
+      _setCursorAndDisplayMode(_currentMode, _currentCursor);
+
+    }
+  }
+  else {
+    // Configure primary LCD controller
+    _setCursorAndDisplayMode(_currentMode, _currentCursor);
+  }   
+    
+}
+
+
+// Set the Displaymode (On/Off) and Cursortype for current controller
+void TextLCD::_setCursorAndDisplayMode(TextLCD::LCDMode displayMode, TextLCD::LCDCursor cursorType) { 
+    
+    // Configure current LCD controller       
+    _writeCommand(0x08 | displayMode | cursorType);
 }
 
 
