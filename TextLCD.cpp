@@ -3,7 +3,8 @@
  *               2013, v01: WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
  *               2013, v02: WH, Added I2C and SPI bus interfaces  
  *               2013, v03: WH, Added support for LCD40x4 which uses 2 controllers 
- *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess 
+ *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess
+ *               2013, v05: WH, Added support for 8x2B, added some UDCs   
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -172,10 +173,32 @@ void TextLCD::_initCtrl() {
     _writeByte(0x2);     // 4-bit mode
     wait_us(40);         // most instructions take 40us
 #endif
-    
+
     // Display is now in 4-bit mode
+
+#if(0)
+    // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
+    // Note: supports 1,2 or 3 lines
+    _writeByte( 0x29 );    // 4-bit Databus, 2 Lines, Select Instruction table 1
+    wait_us(27);           // > 26,3ms 
+    _writeByte( 0x14 );    // Bias: 1/5, 2-Lines LCD 
+    wait_us(30);           // > 26,3ms
+    _writeByte( 0x55 );    // Icon off, Booster on, Set Contrast C5, C4
+    wait_us(30);           // > 26,3ms
+    _writeByte( 0x6d );    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
+    wait_ms(200);          // > 200ms!
+    _writeByte( 0x78 );    // Set Contrast C3, C2, C1, C0
+    wait_us(30);           // > 26,3ms
+    _writeByte( 0x28 );    // Return to Instruction table 0
+    wait_ms(50);
+#endif
+    
+    // Initialise Display configuration
     switch (_type) {
         case LCD8x1:
+        case LCD8x2B:        
+            //8x1 is a regular 1 line display
+            //8x2B is a special case of 16x1
             _writeCommand(0x20); // Function set 001 DL N F - -
                                  //  DL=0 (4 bits bus)             
                                  //   N=0 (1 line)
@@ -611,7 +634,15 @@ int TextLCD::getAddress(int column, int row) {
     switch (_type) {
         case LCD8x1:
             return 0x00 + column;                        
-    
+
+        case LCD8x2B:
+            // LCD8x2B is a special layout of LCD16x1
+            if (row==0) 
+              return 0x00 + column;                        
+            else   
+              return 0x08 + column;                        
+
+
         case LCD16x1:
             // LCD16x1 is a special layout of LCD8x2
             if (column<8) 
@@ -672,7 +703,7 @@ int TextLCD::getAddress(int column, int row) {
         case LCD16x2B:      
             return 0x00 + (row * 40) + column;
       
-        case LCD8x2:        
+        case LCD8x2:               
         case LCD12x2:                
         case LCD16x2:
         case LCD20x2:
@@ -756,6 +787,7 @@ int TextLCD::columns() {
     switch (_type) {
         case LCD8x1:
         case LCD8x2:
+        case LCD8x2B:                
             return 8;
         
         case LCD12x2:        
@@ -793,6 +825,7 @@ int TextLCD::rows() {
             return 1;           
 
         case LCD8x2:  
+        case LCD8x2B:                        
         case LCD12x2:                      
         case LCD16x2:
         case LCD16x2B:
