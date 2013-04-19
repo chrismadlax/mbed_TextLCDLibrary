@@ -5,6 +5,7 @@
  *               2013, v03: WH, Added support for LCD40x4 which uses 2 controllers   
  *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess  
  *               2013, v05: WH, Added support for 8x2B, added some UDCs  
+ *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +36,7 @@
  *
  * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
  * Interface options include direct mbed pins, I2C portexpander (PCF8474) or SPI bus shiftregister (74595)
+ * Supports some controllers that provide internal DC/DC converters for VLCD or VLED. 
  *
  * @code
  * #include "mbed.h"
@@ -49,6 +51,7 @@
  * TextLCD lcd(p15, p16, p17, p18, p19, p20);     // RS, E, D4-D7, LCDType=LCD16x2
  * //TextLCD lcd(&spi_lcd, p8, TextLCD::LCD40x4);   // SPI bus, CS pin, LCD Type  
  * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4); // I2C bus, PCF8574 Slaveaddress, LCD Type
+ * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
  * 
  * int main() {
  *   lcd.printf("Hello World!\n");
@@ -157,6 +160,14 @@ public:
         LCD40x4     /**< 40x4 LCD panel, Two controller version */                        
     };
 
+    /** LCD Controller Device */
+    enum LCDCtrl {
+        HD44780,    /**<  HD44780 (default)      */    
+        WS0010,     /**<  WS0010 OLED Controller */    
+        ST7063      /**<  ST7063                 */    
+    };
+
+
     /** LCD Cursor control */
     enum LCDCursor {
         CurOff_BlkOff = 0x00,  /**<  Cursor Off, Blinking Char Off */    
@@ -179,17 +190,19 @@ public:
      * @param e     Enable line (clock)
      * @param d4-d7 Data lines for using as a 4-bit interface
      * @param type  Sets the panel size/addressing mode (default = LCD16x2)
-     * @param e2    Enable2 line (clock for second controller, LCD40x4 only)      
+     * @param e2    Enable2 line (clock for second controller, LCD40x4 only)  
+     * @param ctrl  LCD controller (default = HD44780)           
      */
-    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName e2 = NC);
+    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName e2 = NC, LCDCtrl ctrl = HD44780);
     
     /** Create a TextLCD interface using an I2C PC8574 portexpander
      *
      * @param i2c             I2C Bus
      * @param deviceAddress   I2C slave address (PCF8574)
      * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+     * @param ctrl            LCD controller (default = HD44780)                
      */
-    TextLCD(I2C *i2c, char deviceAddress, LCDType type = LCD16x2);
+    TextLCD(I2C *i2c, char deviceAddress, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
 
 
     /** Create a TextLCD interface using an SPI 74595 portexpander
@@ -197,8 +210,9 @@ public:
      * @param spi             SPI Bus
      * @param cs              chip select pin (active low)
      * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+     * @param ctrl            LCD controller (default = HD44780)                     
      */
-    TextLCD(SPI *spi, PinName cs, LCDType type = LCD16x2);
+    TextLCD(SPI *spi, PinName cs, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
 
 
 #if DOXYGEN_ONLY
@@ -286,7 +300,7 @@ protected:
     };
 
    /* LCD controller select, mainly used for LCD40x4 */
-    enum _LCDCtrl {
+    enum _LCDCtrl_Idx {
         _LCDCtrl_0,  /*<  Primary */    
         _LCDCtrl_1,  /*<  Secondary */            
     };
@@ -343,8 +357,11 @@ protected:
 //Display type
     LCDMode _currentMode;
 
+//Controller type 
+    LCDCtrl _ctrl;    
+
 //Controller select, mainly used for LCD40x4 
-    _LCDCtrl _ctrl;    
+    _LCDCtrl_Idx _ctrl_idx;    
 
 // Cursor
     int _column;

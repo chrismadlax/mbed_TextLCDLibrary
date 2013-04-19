@@ -5,6 +5,7 @@
  *               2013, v03: WH, Added support for LCD40x4 which uses 2 controllers 
  *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess
  *               2013, v05: WH, Added support for 8x2B, added some UDCs   
+ *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,18 +32,20 @@
 
 /* Create a TextLCD interface for using regular mbed pins
  *
- * @param rs    Instruction/data control line
- * @param e     Enable line (clock)
- * @param d4-d7 Data lines for using as a 4-bit interface
- * @param type  Sets the panel size/addressing mode (default = LCD16x2)
- * @param e2    Enable2 line (clock for second controller, LCD40x4 only) 
+ * @param rs     Instruction/data control line
+ * @param e      Enable line (clock)
+ * @param d4-d7  Data lines for using as a 4-bit interface
+ * @param type   Sets the panel size/addressing mode (default = LCD16x2)
+ * @param e2     Enable2 line (clock for second controller, LCD40x4 only) 
+ * @param ctrl   LCD controller (default = HD44780)   
  */ 
 TextLCD::TextLCD(PinName rs, PinName e,
                  PinName d4, PinName d5, PinName d6, PinName d7,
-                 LCDType type, PinName e2) : _rs(rs), _e(e), _e2(e2),
-                                             _d(d4, d5, d6, d7),
-                                             _cs(NC), 
-                                             _type(type) {
+                 LCDType type, PinName e2, LCDCtrl ctrl) : _rs(rs), _e(e), _e2(e2),
+                                                           _d(d4, d5, d6, d7),
+                                                           _cs(NC), 
+                                                           _type(type),
+                                                           _ctrl(ctrl) {
 
   _busType = _PinBus;
 
@@ -55,13 +58,15 @@ TextLCD::TextLCD(PinName rs, PinName e,
  * @param i2c             I2C Bus
  * @param deviceAddress   I2C slave address (PCF8574)
  * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+ * @param ctrl            LCD controller (default = HD44780)    
  */
-TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type) :
+TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctrl) :
         _rs(NC), _e(NC), _e2(NC),
         _d(NC),
         _i2c(i2c),        
         _cs(NC),
-        _type(type) {
+        _type(type), 
+        _ctrl(ctrl) {        
          
   _slaveAddress = deviceAddress;
   _busType = _I2CBus;
@@ -82,13 +87,15 @@ TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type) :
   * @param spi             SPI Bus
   * @param cs              chip select pin (active low)
   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+  * @param ctrl            LCD controller (default = HD44780)      
   */
-TextLCD::TextLCD(SPI *spi, PinName cs, LCDType type) :
+TextLCD::TextLCD(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
         _rs(NC), _e(NC), _e2(NC),
         _d(NC),
         _spi(spi),        
         _cs(cs),
-        _type(type) {
+        _type(type),
+        _ctrl(ctrl) {                
         
   _busType = _SPIBus;
 
@@ -119,9 +126,9 @@ void TextLCD::_init() {
   
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
-    _ctrl=TextLCD::_LCDCtrl_1; // Select 2nd controller
+    _ctrl_idx=TextLCD::_LCDCtrl_1; // Select 2nd controller
     
-    _initCtrl();               // Init 2nd controller
+    _initCtrl();                   // Init 2nd controller
     
     // Secondary LCD controller Clearscreen
     _writeCommand(0x01);       // cls, and set cursor to 0    
@@ -131,9 +138,9 @@ void TextLCD::_init() {
   }
     
   // Select and configure primary LCD controller
-  _ctrl=TextLCD::_LCDCtrl_0; // Select primary controller  
+  _ctrl_idx=TextLCD::_LCDCtrl_0; // Select primary controller  
 
-  _initCtrl();               // Init primary controller
+  _initCtrl();                   // Init primary controller
   
   // Primary LCD controller Clearscreen
   _writeCommand(0x01);       // cls, and set cursor to 0
@@ -153,7 +160,6 @@ void TextLCD::_initCtrl() {
     
     wait_ms(20);        // Wait 20ms to ensure powered up
 
-#if(1)
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)    
     for (int i=0; i<3; i++) {
         _writeNibble(0x3);
@@ -161,37 +167,52 @@ void TextLCD::_initCtrl() {
     }
     _writeNibble(0x2);   // 4-bit mode
     wait_us(40);         // most instructions take 40us
-#else
-//Original code. Does not comply with specification and causes problems
-//unless used right after power-on.
-
-    // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)
-    for (int i=0; i<3; i++) {
-        _writeByte(0x3);
-        wait_ms(15);    // this command takes 1.64ms, so wait for it 
-    }
-    _writeByte(0x2);     // 4-bit mode
-    wait_us(40);         // most instructions take 40us
-#endif
 
     // Display is now in 4-bit mode
 
-#if(0)
-    // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
-    // Note: supports 1,2 or 3 lines
-    _writeByte( 0x29 );    // 4-bit Databus, 2 Lines, Select Instruction table 1
-    wait_us(27);           // > 26,3ms 
-    _writeByte( 0x14 );    // Bias: 1/5, 2-Lines LCD 
-    wait_us(30);           // > 26,3ms
-    _writeByte( 0x55 );    // Icon off, Booster on, Set Contrast C5, C4
-    wait_us(30);           // > 26,3ms
-    _writeByte( 0x6d );    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
-    wait_ms(200);          // > 200ms!
-    _writeByte( 0x78 );    // Set Contrast C3, C2, C1, C0
-    wait_us(30);           // > 26,3ms
-    _writeByte( 0x28 );    // Return to Instruction table 0
-    wait_ms(50);
-#endif
+    
+    // Device specific initialisations for DC/DC converter to generate VLCD or VLED
+    switch (_ctrl) {
+      case ST7063:
+          // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
+          // Note: supports 1,2 or 3 lines
+          _writeByte( 0x29 );    // 4-bit Databus, 2 Lines, Select Instruction table 1
+          wait_us(27);           // > 26,3ms 
+          _writeByte( 0x14 );    // Bias: 1/5, 2-Lines LCD 
+          wait_us(30);           // > 26,3ms
+          _writeByte( 0x55 );    // Icon off, Booster on, Set Contrast C5, C4
+          wait_us(30);           // > 26,3ms
+          _writeByte( 0x6d );    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
+          wait_ms(200);          // > 200ms!
+          _writeByte( 0x78 );    // Set Contrast C3, C2, C1, C0
+          wait_us(30);           // > 26,3ms
+          _writeByte( 0x28 );    // Return to Instruction table 0
+          wait_ms(50);
+        
+          break;
+
+      case WS0010:         
+          // WS0010 OLED controller: Initialise DC/DC Voltage converter for LEDs
+          // Note: supports 1 or 2 lines (and 16x100 graphics)
+          //       supports 4 fonts (English/Japanese (default), Western European-I, English/Russian, Western European-II)
+
+                           // Cursor/Disp shift set 0001 SC RL  0 0
+                           //
+                           // Mode en Power set     0001 GC PWR 1 1                           
+                           //  GC  = 0 (Graph Mode=1, Char Mode=0)             
+                           //  PWR =   (DC/DC On/Off)
+    
+          //_writeCommand(0x13);   // DC/DC off            
+    
+          _writeCommand(0x17);   // DC/DC on
+          wait_ms(10);
+          
+          break;
+        
+        default:
+          // Devices that do not use DC/DC Voltage converters but external VLCD
+          break;                  
+    }
     
     // Initialise Display configuration
     switch (_type) {
@@ -262,7 +283,7 @@ void TextLCD::cls() {
 
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
-    _ctrl=TextLCD::_LCDCtrl_1; // Select 2nd controller
+    _ctrl_idx=TextLCD::_LCDCtrl_1; // Select 2nd controller
 
     // Second LCD controller Cursor always Off
     _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);
@@ -274,7 +295,7 @@ void TextLCD::cls() {
                      // Since we are not using the Busy flag, Lets be safe and take 10 ms
 
   
-    _ctrl=TextLCD::_LCDCtrl_0; // Select primary controller
+    _ctrl_idx=TextLCD::_LCDCtrl_0; // Select primary controller
   }
   
   // Primary LCD controller Clearscreen
@@ -353,7 +374,7 @@ void TextLCD::_setEnable(bool value) {
 
   switch(_busType) {
     case _PinBus : 
-                    if(_ctrl==TextLCD::_LCDCtrl_0) {
+                    if(_ctrl_idx==TextLCD::_LCDCtrl_0) {
                       if (value)
                         _e  = 1;    // Set E bit 
                       else  
@@ -370,7 +391,7 @@ void TextLCD::_setEnable(bool value) {
     
     case _I2CBus : 
     
-                   if(_ctrl==TextLCD::_LCDCtrl_0) {
+                   if(_ctrl_idx==TextLCD::_LCDCtrl_0) {
                      if (value)
                        _lcd_bus |= D_LCD_E;     // Set E bit 
                      else                     
@@ -389,7 +410,7 @@ void TextLCD::_setEnable(bool value) {
                    break;  
     
     case _SPIBus :
-                   if(_ctrl==TextLCD::_LCDCtrl_0) {
+                   if(_ctrl_idx==TextLCD::_LCDCtrl_0) {
                      if (value)
                        _lcd_bus |= D_LCD_E;     // Set E bit 
                      else                     
@@ -716,13 +737,13 @@ int TextLCD::getAddress(int column, int row) {
           // Each controller is configured as 40x2
           if (row<2) { 
             // Test to see if we need to switch between controllers  
-            if (_ctrl != _LCDCtrl_0) {
+            if (_ctrl_idx != _LCDCtrl_0) {
 
               // Second LCD controller Cursor Off
               _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);    
 
               // Select primary controller
-              _ctrl = _LCDCtrl_0;
+              _ctrl_idx = _LCDCtrl_0;
 
               // Restore cursormode on primary LCD controller
               _setCursorAndDisplayMode(_currentMode, _currentCursor);    
@@ -733,12 +754,12 @@ int TextLCD::getAddress(int column, int row) {
           else {
 
             // Test to see if we need to switch between controllers  
-            if (_ctrl != _LCDCtrl_1) {
+            if (_ctrl_idx != _LCDCtrl_1) {
               // Primary LCD controller Cursor Off
               _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);    
 
               // Select secondary controller
-              _ctrl = _LCDCtrl_1;
+              _ctrl_idx = _LCDCtrl_1;
 
               // Restore cursormode on secondary LCD controller
               _setCursorAndDisplayMode(_currentMode, _currentCursor);    
@@ -867,28 +888,28 @@ void TextLCD::setMode(TextLCD::LCDMode displayMode) {
     
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
-    if (_ctrl==TextLCD::_LCDCtrl_0) {
+    if (_ctrl_idx==TextLCD::_LCDCtrl_0) {
       // Configure primary LCD controller
       _setCursorAndDisplayMode(_currentMode, _currentCursor);
 
       // Select 2nd controller
-      _ctrl=TextLCD::_LCDCtrl_1;
+      _ctrl_idx=TextLCD::_LCDCtrl_1;
   
       // Configure secondary LCD controller    
       _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);
 
       // Restore current controller
-      _ctrl=TextLCD::_LCDCtrl_0;       
+      _ctrl_idx=TextLCD::_LCDCtrl_0;       
     }
     else {
       // Select primary controller
-      _ctrl=TextLCD::_LCDCtrl_0;
+      _ctrl_idx=TextLCD::_LCDCtrl_0;
     
       // Configure primary LCD controller
       _setCursorAndDisplayMode(_currentMode, TextLCD::CurOff_BlkOff);
        
       // Restore current controller
-      _ctrl=TextLCD::_LCDCtrl_1;
+      _ctrl_idx=TextLCD::_LCDCtrl_1;
 
       // Configure secondary LCD controller    
       _setCursorAndDisplayMode(_currentMode, _currentCursor);
@@ -915,22 +936,22 @@ void TextLCD::setUDC(unsigned char c, char *udc_data) {
   
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
-    _LCDCtrl current_ctrl = _ctrl; // Temp save current controller
+    _LCDCtrl_Idx current_ctrl_idx = _ctrl_idx; // Temp save current controller
    
     // Select primary controller     
-    _ctrl=TextLCD::_LCDCtrl_0;
+    _ctrl_idx=TextLCD::_LCDCtrl_0;
     
     // Configure primary LCD controller
     _setUDC(c, udc_data);
 
     // Select 2nd controller
-    _ctrl=TextLCD::_LCDCtrl_1;
+    _ctrl_idx=TextLCD::_LCDCtrl_1;
   
     // Configure secondary LCD controller    
     _setUDC(c, udc_data);
 
     // Restore current controller
-    _ctrl=current_ctrl;       
+    _ctrl_idx=current_ctrl_idx;       
   }
   else {
     // Configure primary LCD controller
