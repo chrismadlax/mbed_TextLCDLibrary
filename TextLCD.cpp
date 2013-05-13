@@ -6,6 +6,7 @@
  *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess
  *               2013, v05: WH, Added support for 8x2B, added some UDCs   
  *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
+ *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -36,16 +37,17 @@
  * @param e      Enable line (clock)
  * @param d4-d7  Data lines for using as a 4-bit interface
  * @param type   Sets the panel size/addressing mode (default = LCD16x2)
+ * @param bl     Backlight control line (optional, default = NC)  
  * @param e2     Enable2 line (clock for second controller, LCD40x4 only) 
  * @param ctrl   LCD controller (default = HD44780)   
  */ 
 TextLCD::TextLCD(PinName rs, PinName e,
                  PinName d4, PinName d5, PinName d6, PinName d7,
-                 LCDType type, PinName e2, LCDCtrl ctrl) : _rs(rs), _e(e), _e2(e2),
-                                                           _d(d4, d5, d6, d7),
-                                                           _cs(NC), 
-                                                           _type(type),
-                                                           _ctrl(ctrl) {
+                 LCDType type, PinName bl, PinName e2, LCDCtrl ctrl) : _rs(rs), _e(e), _bl(bl), _e2(e2),
+                                                                       _d(d4, d5, d6, d7),
+                                                                       _cs(NC), 
+                                                                       _type(type),
+                                                                       _ctrl(ctrl) {
 
   _busType = _PinBus;
 
@@ -61,7 +63,7 @@ TextLCD::TextLCD(PinName rs, PinName e,
  * @param ctrl            LCD controller (default = HD44780)    
  */
 TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctrl) :
-        _rs(NC), _e(NC), _e2(NC),
+        _rs(NC), _e(NC), _bl(NC), _e2(NC),
         _d(NC),
         _i2c(i2c),        
         _cs(NC),
@@ -90,7 +92,7 @@ TextLCD::TextLCD(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctrl) :
   * @param ctrl            LCD controller (default = HD44780)      
   */
 TextLCD::TextLCD(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
-        _rs(NC), _e(NC), _e2(NC),
+        _rs(NC), _e(NC), _bl(NC), _e2(NC),
         _d(NC),
         _spi(spi),        
         _cs(cs),
@@ -163,7 +165,7 @@ void TextLCD::_initCtrl() {
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)    
     for (int i=0; i<3; i++) {
         _writeNibble(0x3);
-        wait_ms(15);     // this command takes 1.64ms, so wait for it 
+        wait_ms(15);     // This command takes 1.64ms, so wait for it 
     }
     _writeNibble(0x2);   // 4-bit mode
     wait_us(40);         // most instructions take 40us
@@ -173,19 +175,19 @@ void TextLCD::_initCtrl() {
     
     // Device specific initialisations for DC/DC converter to generate VLCD or VLED
     switch (_ctrl) {
-      case ST7063:
+      case ST7036:
           // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
           // Note: supports 1,2 or 3 lines
           _writeByte( 0x29 );    // 4-bit Databus, 2 Lines, Select Instruction table 1
-          wait_us(27);           // > 26,3ms 
+          wait_ms(30);           // > 26,3ms 
           _writeByte( 0x14 );    // Bias: 1/5, 2-Lines LCD 
-          wait_us(30);           // > 26,3ms
+          wait_ms(30);           // > 26,3ms
           _writeByte( 0x55 );    // Icon off, Booster on, Set Contrast C5, C4
-          wait_us(30);           // > 26,3ms
+          wait_ms(30);           // > 26,3ms
           _writeByte( 0x6d );    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
           wait_ms(200);          // > 200ms!
           _writeByte( 0x78 );    // Set Contrast C3, C2, C1, C0
-          wait_us(30);           // > 26,3ms
+          wait_ms(30);           // > 26,3ms
           _writeByte( 0x28 );    // Return to Instruction table 0
           wait_ms(50);
         
@@ -471,6 +473,48 @@ void TextLCD::_setRS(bool value) {
   }
 
 }    
+
+// Set BL pin
+// Used for mbed pins, I2C bus expander or SPI shifregister
+void TextLCD::_setBL(bool value) {
+
+  switch(_busType) {
+    case _PinBus : 
+                    if (value)
+                      _bl  = 1;    // Set BL bit 
+                    else  
+                      _bl  = 0;    // Reset BL bit 
+
+                    break;  
+    
+    case _I2CBus : 
+                   if (value)
+                     _lcd_bus |= D_LCD_BL;    // Set BL bit 
+                   else                     
+                     _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+
+                   // write the new data to the I2C portexpander
+                   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+                   
+                   break;
+                       
+    case _SPIBus :
+                   if (value)
+                     _lcd_bus |= D_LCD_BL;    // Set BL bit 
+                   else                     
+                     _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+      
+                   // write the new data to the SPI portexpander
+                   _setCS(false);  
+                   _spi->write(_lcd_bus);   
+                   _setCS(true);  
+     
+                   break;
+  }
+
+}    
+
+
 
 // Place the 4bit data on the databus
 // Used for mbed pins, I2C bus expander or SPI shifregister
@@ -930,6 +974,17 @@ void TextLCD::_setCursorAndDisplayMode(TextLCD::LCDMode displayMode, TextLCD::LC
     // Configure current LCD controller       
     _writeCommand(0x08 | displayMode | cursorType);
 }
+
+// Set the Backlight mode (Off/On)
+void TextLCD::setBacklight(TextLCD::LCDBacklight backlightMode) {
+
+    if (backlightMode == LightOn) {
+      _setBL(true);
+    }
+    else {
+      _setBL(false);    
+    }
+} 
 
 
 void TextLCD::setUDC(unsigned char c, char *udc_data) {
