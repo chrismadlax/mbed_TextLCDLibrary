@@ -6,6 +6,7 @@
  *               2013, v04: WH, Added support for Display On/Off, improved 4bit bootprocess  
  *               2013, v05: WH, Added support for 8x2B, added some UDCs  
  *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
+ *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +49,7 @@
  * // SPI Communication
  * SPI spi_lcd(p5, NC, p7); // MOSI, MISO, SCLK
  *
- * TextLCD lcd(p15, p16, p17, p18, p19, p20);     // RS, E, D4-D7, LCDType=LCD16x2
+ * TextLCD lcd(p15, p16, p17, p18, p19, p20);     // RS, E, D4-D7, LCDType=LCD16x2, BL=NC, E2=NC, LCDTCtrl=HD44780
  * //TextLCD lcd(&spi_lcd, p8, TextLCD::LCD40x4);   // SPI bus, CS pin, LCD Type  
  * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4); // I2C bus, PCF8574 Slaveaddress, LCD Type
  * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
@@ -59,13 +60,14 @@
  * @endcode
  */
 
-
 //Pin Defines for I2C PCF8574 and SPI 74595 Bus interfaces
 //LCD and serial portexpanders should be wired accordingly 
+//
+#if (1)
+//Definitions for hardware used by WH 
 //Note: LCD RW pin must be connected to GND
 //      E2 is used for LCD40x4 (second controller)
 //      BL may be used for future expansion to control backlight
-//
 #define D_LCD_PIN_D4   0
 #define D_LCD_PIN_D5   1
 #define D_LCD_PIN_D6   2
@@ -75,8 +77,26 @@
 #define D_LCD_PIN_E2   6
 #define D_LCD_PIN_BL   7
 
-#define D_LCD_BUS_MSK  0x0F
-#define D_LCD_BUS_DEF  0x00
+#define D_LCD_PIN_RW   D_LCD_PIN_E2
+
+#else
+
+//Definitions for LCD2004 Module from DFROBOT, See http://arduino-info.wikispaces.com/LCD-Blue-I2C
+//This hardware is different from earlier/different Arduino I2C LCD displays
+//Note: LCD RW pin must be kept LOW
+//      E2 is not available on default Arduino hardware and does not support LCD40x4 (second controller)
+//      BL is used to control backlight
+#define D_LCD_PIN_RS   0
+#define D_LCD_PIN_RW   1
+#define D_LCD_PIN_E    2
+#define D_LCD_PIN_BL   3
+#define D_LCD_PIN_D4   4
+#define D_LCD_PIN_D5   5
+#define D_LCD_PIN_D6   6
+#define D_LCD_PIN_D7   7
+
+#define D_LCD_PIN_E2   D_LCD_PIN_RW
+#endif
 
 //Bitpattern Defines for I2C PCF8574 and SPI 74595 Bus
 //
@@ -88,6 +108,11 @@
 #define D_LCD_E        (1<<D_LCD_PIN_E)
 #define D_LCD_E2       (1<<D_LCD_PIN_E2)
 #define D_LCD_BL       (1<<D_LCD_PIN_BL)
+//#define D_LCD_RW       (1<<D_LCD_PIN_RW)
+
+
+#define D_LCD_BUS_MSK  (D_LCD_D4 | D_LCD_D5 | D_LCD_D6 | D_LCD_D7)
+#define D_LCD_BUS_DEF  0x00
 
 
 /** Some sample User Defined Chars 5x7 dots */
@@ -164,7 +189,7 @@ public:
     enum LCDCtrl {
         HD44780,    /**<  HD44780 (default)      */    
         WS0010,     /**<  WS0010 OLED Controller */    
-        ST7063      /**<  ST7063                 */    
+        ST7036      /**<  ST7036                 */    
     };
 
 
@@ -183,6 +208,11 @@ public:
         DispOn  = 0x04   /**<  Display On */            
     };
 
+   /** LCD Backlight control */
+    enum LCDBacklight {
+        LightOff,        /**<  Backlight Off */    
+        LightOn          /**<  Backlight On */            
+    };
 
     /** Create a TextLCD interface for using regular mbed pins
      *
@@ -190,10 +220,11 @@ public:
      * @param e     Enable line (clock)
      * @param d4-d7 Data lines for using as a 4-bit interface
      * @param type  Sets the panel size/addressing mode (default = LCD16x2)
+     * @param bl    Backlight control line (optional, default = NC)      
      * @param e2    Enable2 line (clock for second controller, LCD40x4 only)  
      * @param ctrl  LCD controller (default = HD44780)           
      */
-    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName e2 = NC, LCDCtrl ctrl = HD44780);
+    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName bl = NC, PinName e2 = NC, LCDCtrl ctrl = HD44780);
     
     /** Create a TextLCD interface using an I2C PC8574 portexpander
      *
@@ -283,6 +314,12 @@ public:
      */
     void setMode(TextLCD::LCDMode displayMode);     
 
+    /** Set the Backlight mode
+     *
+     * @param backlightMode The Backlight mode (LightOff, LightOn)
+     */
+    void setBacklight(TextLCD::LCDBacklight backlightMode); 
+
 
     /** Set User Defined Characters
      *
@@ -290,6 +327,7 @@ public:
      * @param char *udc_data    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
      */
     void setUDC(unsigned char c, char *udc_data);
+
 
 protected:
    /* LCD Bus control */
@@ -326,6 +364,7 @@ protected:
 //Low level writes to LCD Bus (serial or parallel)
     void _setEnable(bool value);
     void _setRS(bool value);  
+    void _setBL(bool value);
     void _setData(int value);
     void _setCS(bool value);
     
@@ -334,7 +373,7 @@ protected:
 
   
 // Regular mbed pins bus
-    DigitalOut _rs, _e, _e2;
+    DigitalOut _rs, _e, _bl, _e2;
     BusOut _d;
     
 // I2C bus    
