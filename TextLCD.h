@@ -7,6 +7,7 @@
  *               2013, v05: WH, Added support for 8x2B, added some UDCs  
  *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
  *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT
+ *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined DigitalOut pins
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -50,9 +51,9 @@
  * SPI spi_lcd(p5, NC, p7); // MOSI, MISO, SCLK
  *
  * TextLCD lcd(p15, p16, p17, p18, p19, p20);     // RS, E, D4-D7, LCDType=LCD16x2, BL=NC, E2=NC, LCDTCtrl=HD44780
- * //TextLCD lcd(&spi_lcd, p8, TextLCD::LCD40x4);   // SPI bus, CS pin, LCD Type  
- * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4); // I2C bus, PCF8574 Slaveaddress, LCD Type
- * //TextLCD lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
+ * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);   // SPI bus, CS pin, LCD Type  
+ * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4); // I2C bus, PCF8574 Slaveaddress, LCD Type
+ * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
  * 
  * int main() {
  *   lcd.printf("Hello World!\n");
@@ -163,7 +164,7 @@ const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // 
  * Currently supports 8x1, 8x2, 12x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
  *
  */
-class TextLCD : public Stream {
+class TextLCD_Base : public Stream {
 public:
 
     /** LCD panel format */
@@ -193,6 +194,8 @@ public:
     };
 
 
+
+
     /** LCD Cursor control */
     enum LCDCursor {
         CurOff_BlkOff = 0x00,  /**<  Cursor Off, Blinking Char Off */    
@@ -213,37 +216,6 @@ public:
         LightOff,        /**<  Backlight Off */    
         LightOn          /**<  Backlight On */            
     };
-
-    /** Create a TextLCD interface for using regular mbed pins
-     *
-     * @param rs    Instruction/data control line
-     * @param e     Enable line (clock)
-     * @param d4-d7 Data lines for using as a 4-bit interface
-     * @param type  Sets the panel size/addressing mode (default = LCD16x2)
-     * @param bl    Backlight control line (optional, default = NC)      
-     * @param e2    Enable2 line (clock for second controller, LCD40x4 only)  
-     * @param ctrl  LCD controller (default = HD44780)           
-     */
-    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName bl = NC, PinName e2 = NC, LCDCtrl ctrl = HD44780);
-    
-    /** Create a TextLCD interface using an I2C PC8574 portexpander
-     *
-     * @param i2c             I2C Bus
-     * @param deviceAddress   I2C slave address (PCF8574)
-     * @param type            Sets the panel size/addressing mode (default = LCD16x2)
-     * @param ctrl            LCD controller (default = HD44780)                
-     */
-    TextLCD(I2C *i2c, char deviceAddress, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
-
-
-    /** Create a TextLCD interface using an SPI 74595 portexpander
-     *
-     * @param spi             SPI Bus
-     * @param cs              chip select pin (active low)
-     * @param type            Sets the panel size/addressing mode (default = LCD16x2)
-     * @param ctrl            LCD controller (default = HD44780)                     
-     */
-    TextLCD(SPI *spi, PinName cs, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
 
 
 #if DOXYGEN_ONLY
@@ -312,13 +284,13 @@ public:
      *
      * @param displayMode The Display mode (DispOff, DispOn)
      */
-    void setMode(TextLCD::LCDMode displayMode);     
+    void setMode(LCDMode displayMode);     
 
     /** Set the Backlight mode
      *
-     * @param backlightMode The Backlight mode (LightOff, LightOn)
+     *  @param backlightMode The Backlight mode (LightOff, LightOn)
      */
-    void setBacklight(TextLCD::LCDBacklight backlightMode); 
+    void setBacklight(LCDBacklight backlightMode); 
 
 
     /** Set User Defined Characters
@@ -330,70 +302,55 @@ public:
 
 
 protected:
-   /* LCD Bus control */
-    enum _LCDBus {
-        _PinBus,  /*<  Regular mbed pins */    
-        _I2CBus,  /*<  I2C PCF8574 Portexpander */    
-        _SPIBus   /*<  SPI 74595 Shiftregister */    
-    };
 
-   /* LCD controller select, mainly used for LCD40x4 */
+   /** LCD controller select, mainly used for LCD40x4
+     */
     enum _LCDCtrl_Idx {
         _LCDCtrl_0,  /*<  Primary */    
         _LCDCtrl_1,  /*<  Secondary */            
     };
+
+    /** Create a TextLCD_Base interface
+      * @brief Base class, can not be instantiated
+      *
+      * @param type  Sets the panel size/addressing mode (default = LCD16x2)
+      * @param ctrl  LCD controller (default = HD44780)           
+      */
+    TextLCD_Base(LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
+
     
     // Stream implementation functions
     virtual int _putc(int value);
     virtual int _getc();
 
-//Low level methods for LCD controller
+/** Low level methods for LCD controller
+  */
     void _init();    
     void _initCtrl();    
     int  _address(int column, int row);
-    void _setCursor(TextLCD::LCDCursor show);
+    void _setCursor(LCDCursor show);
     void _setUDC(unsigned char c, char *udc_data);   
-    void _setCursorAndDisplayMode(TextLCD::LCDMode displayMode, TextLCD::LCDCursor cursorType);       
+    void _setCursorAndDisplayMode(LCDMode displayMode, LCDCursor cursorType);       
     
-//Low level write operations to LCD controller
+/** Low level write operations to LCD controller
+  */
     void _writeNibble(int value);
     void _writeByte(int value);
     void _writeCommand(int command);
     void _writeData(int data);
 
-//Low level writes to LCD Bus (serial or parallel)
-    void _setEnable(bool value);
-    void _setRS(bool value);  
-    void _setBL(bool value);
-    void _setData(int value);
-    void _setCS(bool value);
-    
-//Low level writes to LCD serial bus only
-    void _writeBus();      
+/** Pure Virtual Low level writes to LCD Bus (serial or parallel)
+  */
+    virtual void _setEnable(bool value) = 0;
+    virtual void _setRS(bool value) = 0;  
+    virtual void _setBL(bool value) = 0;
+    virtual void _setData(int value) = 0;
 
-  
-// Regular mbed pins bus
-    DigitalOut _rs, _e, _bl, _e2;
-    BusOut _d;
-    
-// I2C bus    
-    I2C *_i2c;
-    unsigned char _slaveAddress;
-    
-// SPI bus        
-    SPI *_spi;
-    DigitalOut _cs;    
-    
-//Bus Interface type    
-    _LCDBus _busType;
-
-// Internal bus mirror value for serial bus only
-    char _lcd_bus;   
     
 //Display type
     LCDType _type;
 
-//Display type
+//Display mode
     LCDMode _currentMode;
 
 //Controller type 
@@ -407,5 +364,105 @@ protected:
     int _row;
     LCDCursor _currentCursor;    
 };
+
+
+/** Create a TextLCD interface for using regular mbed pins
+  *
+  */
+class TextLCD : public TextLCD_Base {
+public:    
+    /** Create a TextLCD interface for using regular mbed pins
+     *
+     * @param rs    Instruction/data control line
+     * @param e     Enable line (clock)
+     * @param d4-d7 Data lines for using as a 4-bit interface
+     * @param type  Sets the panel size/addressing mode (default = LCD16x2)
+     * @param bl    Backlight control line (optional, default = NC)      
+     * @param e2    Enable2 line (clock for second controller, LCD40x4 only)  
+     * @param ctrl  LCD controller (default = HD44780)           
+     */
+    TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName bl = NC, PinName e2 = NC, LCDCtrl ctrl = HD44780);
+
+private:    
+//Low level writes to LCD Bus (serial or parallel)
+    virtual void _setEnable(bool value);
+    virtual void _setRS(bool value);  
+    virtual void _setBL(bool value);
+    virtual void _setData(int value);
+
+// Regular mbed pins bus
+    DigitalOut _rs, _e, _bl, _e2;
+    BusOut _d;   
+};
+
+
+
+/** Create a TextLCD interface using an I2C PC8574 portexpander
+  *
+  */
+class TextLCD_I2C : public TextLCD_Base {    
+public:
+    /** Create a TextLCD interface using an I2C PC8574 portexpander
+     *
+     * @param i2c             I2C Bus
+     * @param deviceAddress   I2C slave address (PCF8574)
+     * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+     * @param ctrl            LCD controller (default = HD44780)                
+     */
+    TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
+
+private:
+//Low level writes to LCD Bus (serial or parallel)
+    virtual void _setEnable(bool value);
+    virtual void _setRS(bool value);  
+    virtual void _setBL(bool value);
+    virtual void _setData(int value);   
+  
+//I2C bus
+    I2C *_i2c;
+    char _slaveAddress;
+    
+// Internal bus mirror value for serial bus only
+    char _lcd_bus;   
+    
+};
+
+
+
+/** Create a TextLCD interface using an SPI 74595 portexpander
+  *
+  */
+class TextLCD_SPI : public TextLCD_Base {    
+public:
+    /** Create a TextLCD interface using an SPI 74595 portexpander
+     *
+     * @param spi             SPI Bus
+     * @param cs              chip select pin (active low)
+     * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+     * @param ctrl            LCD controller (default = HD44780)                     
+     */
+    TextLCD_SPI(SPI *spi, PinName cs, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
+
+
+private:
+//Low level writes to LCD Bus (serial or parallel)
+    virtual void _setEnable(bool value);
+    virtual void _setRS(bool value);  
+    virtual void _setBL(bool value);
+    virtual void _setData(int value);
+    virtual void _setCS(bool value);
+    
+//Low level writes to LCD serial bus only
+    void _writeBus();      
+   
+// SPI bus        
+    SPI *_spi;
+    DigitalOut _cs;    
+    
+// Internal bus mirror value for serial bus only
+    char _lcd_bus;   
+
+};
+
 
 #endif
