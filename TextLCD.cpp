@@ -7,7 +7,7 @@
  *               2013, v05: WH, Added support for 8x2B, added some UDCs   
  *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
  *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT 
- *               2014, v08: WH, Refactored in Base in Derived Classes to deal with mbed lib change regarding 'NC' defined pins 
+ *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined pins 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -723,9 +723,11 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
   
 }
 
+///--------- End TextLCD_Base -----------
 
-///-------------------------------------------------------------------
 
+
+///--------- Start TextLCD Bus -----------
 
 /* Create a TextLCD interface for using regular mbed pins
  *
@@ -741,29 +743,56 @@ TextLCD::TextLCD(PinName rs, PinName e,
                  PinName d4, PinName d5, PinName d6, PinName d7,
                  LCDType type, PinName bl, PinName e2, LCDCtrl ctrl) :
                  TextLCD_Base(type, ctrl), 
-                 _rs(rs), _e(e), _bl(bl), _e2(e2),
-                 _d(d4, d5, d6, d7) {
+                 _rs(rs), _e(e), _d(d4, d5, d6, d7) {
+
+  // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
+  if (bl != NC) {
+    _bl = new DigitalOut(bl);   //Construct new pin 
+    _bl->write(0);              //Deactivate    
+  }
+  else {
+    // No Hardware Backlight pin       
+    _bl = NULL;                 //Construct dummy pin     
+  }  
+
+  // The hardware Enable2 pin is only needed for LCD40x4. Test and make sure whether it exists or not to prevent illegal access.
+  if (e2 != NC) {
+    _e2 = new DigitalOut(e2);   //Construct new pin 
+    _e2->write(0);              //Deactivate    
+  }
+  else {
+    // No Hardware Enable pin       
+    _e2 = NULL;                 //Construct dummy pin     
+  }  
                                                                            
   _init();
 
 }
 
-// Set E pin (or E2 pin)
-// Used for mbed pins, I2C bus expander or SPI shiftregister
+/** Set E pin (or E2 pin)
+  * Used for mbed pins, I2C bus expander or SPI shiftregister
+  * Default PinName value for E2 is NC, must be used as pointer to avoid issues with mbed lib and DigitalOut pins
+  *   @param  value true or false
+  *   @return none 
+  */
 void TextLCD::_setEnable(bool value) {
 
-                    if(_ctrl_idx==_LCDCtrl_0) {
-                      if (value)
-                        _e  = 1;    // Set E bit 
-                      else  
-                        _e  = 0;    // Reset E bit  
-                    }    
-                    else {   
-                      if (value)
-                        _e2 = 1;    // Set E2 bit 
-                      else  
-                        _e2 = 0;    // Reset E2 bit  
-                    }    
+  if(_ctrl_idx==_LCDCtrl_0) {
+    if (value) {
+      _e  = 1;    // Set E bit 
+    }  
+    else { 
+      _e  = 0;    // Reset E bit  
+    }  
+  }    
+  else { 
+    if (value) {
+      if (_e2 != NULL) {_e2->write(1);}  //Set E2 bit
+    }  
+    else { 
+      if (_e2 != NULL) {_e2->write(0);}  //Reset E2 bit     
+    }  
+  }    
 
 }    
 
@@ -771,25 +800,31 @@ void TextLCD::_setEnable(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD::_setRS(bool value) {
 
-  if (value)
+  if (value) {
     _rs  = 1;    // Set RS bit 
-  else  
+  }  
+  else  {
     _rs  = 0;    // Reset RS bit 
+  }  
 
 }    
 
-// Set BL pin
-// Used for mbed pins, I2C bus expander or SPI shiftregister
+/** Set BL pin
+  * Used for mbed pins, I2C bus expander or SPI shiftregister
+  * Default PinName value is NC, must be used as pointer to avoid issues with mbed lib and DigitalOut pins
+  *   @param  value true or false
+  *   @return none  
+  */
 void TextLCD::_setBL(bool value) {
 
-  if (value)
-    _bl  = 1;    // Set BL bit 
-  else  
-    _bl  = 0;    // Reset BL bit 
+  if (value) {
+    if (_bl != NULL) {_bl->write(1);}  //Set BL bit
+  }  
+  else { 
+    if (_bl != NULL) {_bl->write(0);}  //Reset BL bit  
+  }  
 
 }    
-
-
 
 // Place the 4bit data on the databus
 // Used for mbed pins, I2C bus expander or SPI shifregister
@@ -797,24 +832,34 @@ void TextLCD::_setData(int value) {
   _d = value & 0x0F;   // Write Databits 
 }    
 
+/** Destruct a TextLCD interface for using regular mbed pins
+  *
+  * @param  none
+  * @return none
+  */ 
+TextLCD::~TextLCD() {
+   if (_bl != NULL) {delete _bl;}  // BL pin
+   if (_e2 != NULL) {delete _e2;}  // E2 pin
+}
+
+    
+///----------- End TextLCD ---------------
 
 
+///--------- Start TextLCD_I2C -----------
 
-///----------------------------------------------------------------------------------------
-
-
-/* Create a TextLCD interface using an I2C PC8574 portexpander
- *
- * @param i2c             I2C Bus
- * @param deviceAddress   I2C slave address (PCF8574)
- * @param type            Sets the panel size/addressing mode (default = LCD16x2)
- * @param ctrl            LCD controller (default = HD44780)    
- */
+/** Create a TextLCD interface using an I2C PC8574 or PCF8574A portexpander
+  *
+  * @param i2c             I2C Bus
+  * @param deviceAddress   I2C slave address (PCF8574 or PCF8574A, default = 0x40)
+  * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+  * @param ctrl            LCD controller (default = HD44780)    
+  */
 TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctrl) :
                          TextLCD_Base(type, ctrl), 
                          _i2c(i2c){
                               
-  _slaveAddress = deviceAddress;
+  _slaveAddress = deviceAddress & 0xFE;
   
   // Init the portexpander bus
   _lcd_bus = D_LCD_BUS_DEF;
@@ -830,21 +875,21 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_I2C::_setEnable(bool value) {
 
-                   if(_ctrl_idx==_LCDCtrl_0) {
-                     if (value)
-                       _lcd_bus |= D_LCD_E;     // Set E bit 
-                     else                     
-                       _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
-                   }
-                   else {
-                     if (value)
-                       _lcd_bus |= D_LCD_E2;    // Set E2 bit 
-                     else                     
-                       _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
-                   }    
+  if(_ctrl_idx==_LCDCtrl_0) {
+    if (value)
+      _lcd_bus |= D_LCD_E;     // Set E bit 
+    else                     
+      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+  }
+  else {
+    if (value)
+      _lcd_bus |= D_LCD_E2;    // Set E2 bit 
+    else                     
+      _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
+    }    
 
-                   // write the new data to the I2C portexpander
-                   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+  // write the new data to the I2C portexpander
+  _i2c->write(_slaveAddress, &_lcd_bus, 1);    
 
 }    
 
@@ -852,13 +897,13 @@ void TextLCD_I2C::_setEnable(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_I2C::_setRS(bool value) {
 
-                   if (value)
-                     _lcd_bus |= D_LCD_RS;    // Set RS bit 
-                   else                     
-                     _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+  if (value)
+    _lcd_bus |= D_LCD_RS;    // Set RS bit 
+  else                     
+    _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
 
-                   // write the new data to the I2C portexpander
-                   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+  // write the new data to the I2C portexpander
+  _i2c->write(_slaveAddress, &_lcd_bus, 1);    
                   
 }    
 
@@ -882,55 +927,48 @@ void TextLCD_I2C::_setBL(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shifregister
 void TextLCD_I2C::_setData(int value) {
   int data;
+
+  // Set bit by bit to support any mapping of expander portpins to LCD pins
   
-                    data = value & 0x0F;
-                    if (data & 0x01)
-                      _lcd_bus |= D_LCD_D4;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
+  data = value & 0x0F;
+  if (data & 0x01)
+    _lcd_bus |= D_LCD_D4;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
 
-                    if (data & 0x02)
-                      _lcd_bus |= D_LCD_D5;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+  if (data & 0x02)
+    _lcd_bus |= D_LCD_D5;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
 
-                    if (data & 0x04)
-                      _lcd_bus |= D_LCD_D6;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+  if (data & 0x04)
+    _lcd_bus |= D_LCD_D6;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
 
-                    if (data & 0x08)
-                      _lcd_bus |= D_LCD_D7;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
+  if (data & 0x08)
+    _lcd_bus |= D_LCD_D7;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
                     
-                    // write the new data to the I2C portexpander
-                    _i2c->write(_slaveAddress, &_lcd_bus, 1);  
-                   
-
+  // write the new data to the I2C portexpander
+  _i2c->write(_slaveAddress, &_lcd_bus, 1);  
+                 
 }    
 
+///---------- End TextLCD_I2C ------------
 
 
 
+///--------- Start TextLCD_SPI -----------
 
-///------------------------------------------------------------------------------------
-
-
-
-
-
-
-// TextLCD_SPI Implementation
-
-
- /* Create a TextLCD interface using an SPI 74595 portexpander
-  *
-  * @param spi             SPI Bus
-  * @param cs              chip select pin (active low)
-  * @param type            Sets the panel size/addressing mode (default = LCD16x2)
-  * @param ctrl            LCD controller (default = HD44780)      
-  */
+ /** Create a TextLCD interface using an SPI 74595 portexpander
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param ctrl            LCD controller (default = HD44780)      
+   */
 TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
                          TextLCD_Base(type, ctrl), 
                          _spi(spi),        
@@ -959,23 +997,23 @@ TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_SPI::_setEnable(bool value) {
 
-                   if(_ctrl_idx==_LCDCtrl_0) {
-                     if (value)
-                       _lcd_bus |= D_LCD_E;     // Set E bit 
-                     else                     
-                       _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
-                   }
-                   else {
-                     if (value)
-                       _lcd_bus |= D_LCD_E2;    // Set E2 bit 
-                     else                     
-                       _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
-                   }
+  if(_ctrl_idx==_LCDCtrl_0) {
+    if (value)
+      _lcd_bus |= D_LCD_E;     // Set E bit 
+    else                     
+      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+  }
+  else {
+    if (value)
+      _lcd_bus |= D_LCD_E2;    // Set E2 bit 
+    else                     
+      _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
+  }
                   
-                   // write the new data to the SPI portexpander
-                   _setCS(false);  
-                   _spi->write(_lcd_bus);   
-                   _setCS(true);  
+  // write the new data to the SPI portexpander
+  _setCS(false);  
+  _spi->write(_lcd_bus);   
+  _setCS(true);  
   
 }    
 
@@ -983,10 +1021,12 @@ void TextLCD_SPI::_setEnable(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_SPI::_setRS(bool value) {
 
-  if (value)
+  if (value) {
     _lcd_bus |= D_LCD_RS;    // Set RS bit 
-  else                     
+  }  
+  else {                    
     _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+  }
      
   // write the new data to the SPI portexpander
   _setCS(false);  
@@ -999,10 +1039,12 @@ void TextLCD_SPI::_setRS(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_SPI::_setBL(bool value) {
 
-  if (value)
+  if (value) {
     _lcd_bus |= D_LCD_BL;    // Set BL bit 
-  else                     
+  }  
+  else {
     _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+  }
       
   // write the new data to the SPI portexpander
   _setCS(false);  
@@ -1017,32 +1059,34 @@ void TextLCD_SPI::_setBL(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_SPI::_setData(int value) {
   int data;
-  
-                    data = value & 0x0F;
-                    if (data & 0x01)
-                      _lcd_bus |= D_LCD_D4;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
 
-                    if (data & 0x02)
-                      _lcd_bus |= D_LCD_D5;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+  // Set bit by bit to support any mapping of expander portpins to LCD pins
+    
+  data = value & 0x0F;
+  if (data & 0x01)
+    _lcd_bus |= D_LCD_D4;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
 
-                    if (data & 0x04)
-                      _lcd_bus |= D_LCD_D6;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+  if (data & 0x02)
+    _lcd_bus |= D_LCD_D5;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
 
-                    if (data & 0x08)
-                      _lcd_bus |= D_LCD_D7;   // Set Databit 
-                    else                     
-                      _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
+  if (data & 0x04)
+    _lcd_bus |= D_LCD_D6;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+
+  if (data & 0x08)
+    _lcd_bus |= D_LCD_D7;   // Set Databit 
+  else                     
+    _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
                     
-                   // write the new data to the SPI portexpander
-                   _setCS(false);  
-                   _spi->write(_lcd_bus);   
-                   _setCS(true);  
+  // write the new data to the SPI portexpander
+  _setCS(false);  
+  _spi->write(_lcd_bus);   
+  _setCS(true);  
         
 }    
 
@@ -1054,14 +1098,13 @@ void TextLCD_SPI::_setCS(bool value) {
   if (value) {   
     _cs  = 1;    // Set CS pin 
   }  
-  else  
+  else {
     _cs  = 0;    // Reset CS pin 
-  
+  }
 }
 
 
-
-
+///---------- End TextLCD_SPI ------------
 
 
 
