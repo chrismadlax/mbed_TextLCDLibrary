@@ -37,7 +37,7 @@
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
  * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
- * Interface options include direct mbed pins, I2C portexpander (PCF8474) or SPI bus shiftregister (74595)
+ * Interface options include direct mbed pins, I2C portexpander (PCF8474, PCF8574A) or SPI bus shiftregister (74595)
  * Supports some controllers that provide internal DC/DC converters for VLCD or VLED. 
  *
  * @code
@@ -50,9 +50,9 @@
  * // SPI Communication
  * SPI spi_lcd(p5, NC, p7); // MOSI, MISO, SCLK
  *
- * TextLCD lcd(p15, p16, p17, p18, p19, p20);     // RS, E, D4-D7, LCDType=LCD16x2, BL=NC, E2=NC, LCDTCtrl=HD44780
- * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);   // SPI bus, CS pin, LCD Type  
- * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4); // I2C bus, PCF8574 Slaveaddress, LCD Type
+ * //TextLCD lcd(p15, p16, p17, p18, p19, p20);                          // RS, E, D4-D7, LCDType=LCD16x2, BL=NC, E2=NC, LCDTCtrl=HD44780
+ * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);                    // SPI bus, CS pin, LCD Type  
+ * TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4);                  // I2C bus, PCF8574 Slaveaddress, LCD Type
  * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
  * 
  * int main() {
@@ -161,7 +161,8 @@ const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // 
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * Currently supports 8x1, 8x2, 12x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
+ * @brief Currently supports 8x1, 8x2, 12x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
+ *        Interface options include direct mbed pins, I2C portexpander (PCF8474, PCF8574A) or SPI bus shiftregister (74595) 
  *
  */
 class TextLCD_Base : public Stream {
@@ -192,8 +193,6 @@ public:
         WS0010,     /**<  WS0010 OLED Controller */    
         ST7036      /**<  ST7036                 */    
     };
-
-
 
 
     /** LCD Cursor control */
@@ -258,7 +257,8 @@ public:
     void setAddress(int column, int row);        
 
 
-    /** Clear the screen and locate to 0,0 */
+    /** Clear the screen and locate to 0,0
+     */
     void cls();
 
     /** Return the number of rows
@@ -365,6 +365,11 @@ protected:
     LCDCursor _currentCursor;    
 };
 
+///--------- End TextLCD_Base -----------
+
+
+
+///--------- Start TextLCD Bus -----------
 
 /** Create a TextLCD interface for using regular mbed pins
   *
@@ -383,6 +388,14 @@ public:
      */
     TextLCD(PinName rs, PinName e, PinName d4, PinName d5, PinName d6, PinName d7, LCDType type = LCD16x2, PinName bl = NC, PinName e2 = NC, LCDCtrl ctrl = HD44780);
 
+
+   /** Destruct a TextLCD interface for using regular mbed pins
+     *
+     * @param  none
+     * @return none
+     */ 
+    virtual ~TextLCD();
+
 private:    
 //Low level writes to LCD Bus (serial or parallel)
     virtual void _setEnable(bool value);
@@ -390,26 +403,37 @@ private:
     virtual void _setBL(bool value);
     virtual void _setData(int value);
 
-// Regular mbed pins bus
-    DigitalOut _rs, _e, _bl, _e2;
-    BusOut _d;   
+/** Regular mbed pins bus
+  */
+    DigitalOut _rs, _e;
+    BusOut _d;
+    
+/** Optional Hardware pins for the Backlight and LCD40x4 device
+  * Default PinName value is NC, must be used as pointer to avoid issues with mbed lib and DigitalOut pins
+  */
+    DigitalOut *_bl, *_e2;       
 };
 
+    
+///----------- End TextLCD ---------------
 
 
-/** Create a TextLCD interface using an I2C PC8574 portexpander
+///--------- Start TextLCD_I2C -----------
+
+
+/** Create a TextLCD interface using an I2C PC8574 or PCF8574A portexpander
   *
   */
 class TextLCD_I2C : public TextLCD_Base {    
 public:
-    /** Create a TextLCD interface using an I2C PC8574 portexpander
+    /** Create a TextLCD interface using an I2C PC8574 or PCF8574A portexpander
      *
      * @param i2c             I2C Bus
-     * @param deviceAddress   I2C slave address (PCF8574)
+     * @param deviceAddress   I2C slave address (PCF8574 or PCF8574A, default = 0x40)
      * @param type            Sets the panel size/addressing mode (default = LCD16x2)
      * @param ctrl            LCD controller (default = HD44780)                
      */
-    TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
+    TextLCD_I2C(I2C *i2c, char deviceAddress = 0x40, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
 
 private:
 //Low level writes to LCD Bus (serial or parallel)
@@ -427,6 +451,12 @@ private:
     
 };
 
+
+///---------- End TextLCD_I2C ------------
+
+
+
+///--------- Start TextLCD_SPI -----------
 
 
 /** Create a TextLCD interface using an SPI 74595 portexpander
@@ -464,5 +494,6 @@ private:
 
 };
 
+///---------- End TextLCD_SPI ------------
 
 #endif
