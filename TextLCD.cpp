@@ -723,11 +723,11 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
   
 }
 
-///--------- End TextLCD_Base -----------
+//--------- End TextLCD_Base -----------
 
 
 
-///--------- Start TextLCD Bus -----------
+//--------- Start TextLCD Bus -----------
 
 /* Create a TextLCD interface for using regular mbed pins
  *
@@ -843,10 +843,10 @@ TextLCD::~TextLCD() {
 }
 
     
-///----------- End TextLCD ---------------
+//----------- End TextLCD ---------------
 
 
-///--------- Start TextLCD_I2C -----------
+//--------- Start TextLCD_I2C -----------
 
 /** Create a TextLCD interface using an I2C PC8574 or PCF8574A portexpander
   *
@@ -956,11 +956,11 @@ void TextLCD_I2C::_setData(int value) {
                  
 }    
 
-///---------- End TextLCD_I2C ------------
+//---------- End TextLCD_I2C ------------
 
 
 
-///--------- Start TextLCD_SPI -----------
+//--------- Start TextLCD_SPI -----------
 
  /** Create a TextLCD interface using an SPI 74595 portexpander
    *
@@ -1104,7 +1104,7 @@ void TextLCD_SPI::_setCS(bool value) {
 }
 
 
-///---------- End TextLCD_SPI ------------
+//---------- End TextLCD_SPI ------------
 
 
 

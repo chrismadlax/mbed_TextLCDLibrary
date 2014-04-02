@@ -365,11 +365,11 @@ protected:
     LCDCursor _currentCursor;    
 };
 
-///--------- End TextLCD_Base -----------
+//--------- End TextLCD_Base -----------
 
 
 
-///--------- Start TextLCD Bus -----------
+//--------- Start TextLCD Bus -----------
 
 /** Create a TextLCD interface for using regular mbed pins
   *
@@ -415,10 +415,10 @@ private:
 };
 
     
-///----------- End TextLCD ---------------
+//----------- End TextLCD ---------------
 
 
-///--------- Start TextLCD_I2C -----------
+//--------- Start TextLCD_I2C -----------
 
 
 /** Create a TextLCD interface using an I2C PC8574 or PCF8574A portexpander
@@ -452,11 +452,11 @@ private:
 };
 
 
-///---------- End TextLCD_I2C ------------
+//---------- End TextLCD_I2C ------------
 
 
 
-///--------- Start TextLCD_SPI -----------
+//--------- Start TextLCD_SPI -----------
 
 
 /** Create a TextLCD interface using an SPI 74595 portexpander
@@ -494,6 +494,6 @@ private:
 
 };
 
-///---------- End TextLCD_SPI ------------
+//---------- End TextLCD_SPI ------------
 
 #endif
