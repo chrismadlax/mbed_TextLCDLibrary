@@ -191,7 +191,8 @@ public:
     enum LCDCtrl {
         HD44780,    /**<  HD44780 (default)      */    
         WS0010,     /**<  WS0010 OLED Controller */    
-        ST7036      /**<  ST7036                 */    
+        ST7036,      /**<  ST7036                 */   
+        ST7032      /**<  ST7032                 */   
     };
 
 
@@ -335,7 +336,7 @@ protected:
 /** Low level write operations to LCD controller
   */
     void _writeNibble(int value);
-    void _writeByte(int value);
+    virtual void _writeByte(int value);
     void _writeCommand(int command);
     void _writeData(int data);
 
@@ -495,5 +496,43 @@ private:
 };
 
 //---------- End TextLCD_SPI ------------
+
+
+//--------- Start TextLCD_NativeSPI -----------
+
+
+/** Create a TextLCD interface with direct SPI access to the controller
+  *
+  */
+class TextLCD_NativeSPI : public TextLCD_Base {    
+public:
+    /** Create a TextLCD interface using an SPI 74595 portexpander
+     *
+     * @param spi             SPI Bus
+     * @param cs              chip select pin (active low)
+     * @param rs              Instruction/data control line
+     * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+     * @param bl              Backlight control line (optional, default = NC)  
+     * @param ctrl            LCD controller (default = ST7032)                     
+     */
+    TextLCD_NativeSPI(SPI *spi, PinName cs, PinName rs, LCDType type = LCD16x2, PinName bl = NC, LCDCtrl ctrl = ST7032);
+    virtual ~TextLCD_NativeSPI(void);
+
+private:
+    virtual void _setEnable(bool value);
+    virtual void _setRS(bool value);  
+    virtual void _setBL(bool value);
+    virtual void _setData(int value);
+    virtual void _writeByte(int value);
+   
+// SPI bus        
+    SPI *_spi;
+    DigitalOut _cs;    
+    DigitalOut _rs;
+    DigitalOut *_bl;
+
+};
+
+//---------- End TextLCD_NativeSPI ------------
 
 #endif
