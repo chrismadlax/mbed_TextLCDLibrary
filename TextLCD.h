@@ -8,6 +8,7 @@
  *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
  *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT
  *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined DigitalOut pins
+ *               2014, v09: WH/EO, Added Class for Native SPI controllers such as ST7032 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -54,6 +55,7 @@
  * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);                    // SPI bus, CS pin, LCD Type  
  * TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4);                  // I2C bus, PCF8574 Slaveaddress, LCD Type
  * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
+ * //TextLCD_SPI_N lcd(&spi_lcd, p8, p9);                                  // SPI bus, CS pin, RS pin, LCDType=LCD16x2, BL=NC, LCDTCtrl=ST7032   
  * 
  * int main() {
  *   lcd.printf("Hello World!\n");
@@ -501,12 +503,12 @@ private:
 //--------- Start TextLCD_NativeSPI -----------
 
 
-/** Create a TextLCD interface with direct SPI access to the controller
+/** Create a TextLCD interface using a controller with native SPI interface
   *
   */
-class TextLCD_NativeSPI : public TextLCD_Base {    
+class TextLCD_SPI_N : public TextLCD_Base {    
 public:
-    /** Create a TextLCD interface using an SPI 74595 portexpander
+    /** Create a TextLCD interface using a controller with native SPI interface
      *
      * @param spi             SPI Bus
      * @param cs              chip select pin (active low)
@@ -515,8 +517,8 @@ public:
      * @param bl              Backlight control line (optional, default = NC)  
      * @param ctrl            LCD controller (default = ST7032)                     
      */
-    TextLCD_NativeSPI(SPI *spi, PinName cs, PinName rs, LCDType type = LCD16x2, PinName bl = NC, LCDCtrl ctrl = ST7032);
-    virtual ~TextLCD_NativeSPI(void);
+    TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type = LCD16x2, PinName bl = NC, LCDCtrl ctrl = ST7032);
+    virtual ~TextLCD_SPI_N(void);
 
 private:
     virtual void _setEnable(bool value);
@@ -533,6 +535,6 @@ private:
 
 };
 
-//---------- End TextLCD_NativeSPI ------------
+//---------- End TextLCD_SPI_N ------------
 
 #endif

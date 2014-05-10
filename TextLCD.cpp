@@ -8,6 +8,7 @@
  *               2013, v06: WH, Added support for devices that use internal DC/DC converters 
  *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT 
  *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined pins 
+ *               2014, v09: WH/EO, Added Class for Native SPI controllers such as ST7032 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -90,8 +91,7 @@ void TextLCD_Base::_initCtrl() {
     wait_us(40);         // most instructions take 40us
 
     // Display is now in 4-bit mode
-
-    
+   
     // Device specific initialisations for DC/DC converter to generate VLCD or VLED
     switch (_ctrl) {
       case ST7036:
@@ -108,37 +108,36 @@ void TextLCD_Base::_initCtrl() {
           _writeByte( 0x78 );    // Set Contrast C3, C2, C1, C0
           wait_ms(30);           // > 26,3ms
           _writeByte( 0x28 );    // Return to Instruction table 0
-          wait_ms(50);
-        
+          wait_ms(50);      
           break;
+          
       case ST7032:
-          _writeByte( 0x1c );   //Internal OSC frequency adjustment 183HZ    bias will be 1/4 
+          _writeByte( 0x1c );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
           wait_us(30);
           _writeByte( 0x73 );    //Contrast control  low byte
           wait_us(30);  
-          _writeByte( 0x57 );    //booster circuit is turn on.    /ICON display off. /Contrast control   high byte
+          _writeByte( 0x57 );    //booster circuit is turn on. /ICON display off. /Contrast control   high byte
           wait_us(30);
-          _writeByte( 0x6c );  //Follower control
+          _writeByte( 0x6c );    //Follower control
           wait_us(50);   
           _writeByte( 0x0c );    //DISPLAY ON
           wait_us(30);
           break;
+          
       case WS0010:         
           // WS0010 OLED controller: Initialise DC/DC Voltage converter for LEDs
           // Note: supports 1 or 2 lines (and 16x100 graphics)
           //       supports 4 fonts (English/Japanese (default), Western European-I, English/Russian, Western European-II)
-
                            // Cursor/Disp shift set 0001 SC RL  0 0
                            //
                            // Mode en Power set     0001 GC PWR 1 1                           
                            //  GC  = 0 (Graph Mode=1, Char Mode=0)             
                            //  PWR =   (DC/DC On/Off)
     
-          //_writeCommand(0x13);   // DC/DC off            
-    
+          //_writeCommand(0x13);   // DC/DC off              
           _writeCommand(0x17);   // DC/DC on
-          wait_ms(10);
           
+          wait_ms(10);
           break;
         
         default:
@@ -1114,24 +1113,25 @@ void TextLCD_SPI::_setCS(bool value) {
   }
 }
 
-
 //---------- End TextLCD_SPI ------------
 
 
-//--------- Start TextLCD_NativeSPI -----------
+//--------- Start TextLCD_SPI_N ---------
 
- /** Create a TextLCD interface using an SPI 74595 portexpander
+ /** Create a TextLCD interface using a controller with a native SPI interface
    *
    * @param spi             SPI Bus
    * @param cs              chip select pin (active low)
+   * @param rs              Instruction/data control line
    * @param type            Sets the panel size/addressing mode (default = LCD16x2)
-   * @param ctrl            LCD controller (default = HD44780)      
-   */
-TextLCD_NativeSPI::TextLCD_NativeSPI(SPI *spi, PinName cs, PinName rs, LCDType type, PinName bl, LCDCtrl ctrl) :
-                         TextLCD_Base(type, ctrl), 
-                         _spi(spi),        
-                         _cs(cs),
-                         _rs(rs) {      
+   * @param bl              Backlight control line (optional, default = NC)  
+   * @param ctrl            LCD controller (default = ST7032) 
+   */       
+TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, PinName bl, LCDCtrl ctrl) :
+                             TextLCD_Base(type, ctrl), 
+                             _spi(spi),        
+                             _cs(cs),
+                             _rs(rs) {      
         
   // Setup the spi for 8 bit data, low steady state clock,
   // rising edge capture, with a 500KHz or 1MHz clock rate  
@@ -1153,28 +1153,28 @@ TextLCD_NativeSPI::TextLCD_NativeSPI(SPI *spi, PinName cs, PinName rs, LCDType t
   _init();
 }
 
-TextLCD_NativeSPI::~TextLCD_NativeSPI() {
+TextLCD_SPI_N::~TextLCD_SPI_N() {
    if (_bl != NULL) {delete _bl;}  // BL pin
 }
 
 // Not used in this mode
-void TextLCD_NativeSPI::_setEnable(bool value) {
+void TextLCD_SPI_N::_setEnable(bool value) {
 }    
 
 // Set RS pin
 // Used for mbed pins, I2C bus expander or SPI shiftregister
-void TextLCD_NativeSPI::_setRS(bool value) {
+void TextLCD_SPI_N::_setRS(bool value) {
     _rs = value;
 }    
 
 // Set BL pin
-void TextLCD_NativeSPI::_setBL(bool value) {
+void TextLCD_SPI_N::_setBL(bool value) {
     if (_bl)
         _bl->write(value);   
 }    
 
 // Write a byte using SPI
-void TextLCD_NativeSPI::_writeByte(int value) {
+void TextLCD_SPI_N::_writeByte(int value) {
     _cs = 0;
     wait_us(1);
     _spi->write(value);
@@ -1182,13 +1182,12 @@ void TextLCD_NativeSPI::_writeByte(int value) {
     _cs = 1;
 }
     
-
 // Not used in this mode
-void TextLCD_NativeSPI::_setData(int value) {
+void TextLCD_SPI_N::_setData(int value) {
 }    
 
 
-//---------- End TextLCD_NativeSPI ------------
+//-------- End TextLCD_SPI_N ------------
 
 
 
