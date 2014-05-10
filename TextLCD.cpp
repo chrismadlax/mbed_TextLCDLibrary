@@ -111,7 +111,18 @@ void TextLCD_Base::_initCtrl() {
           wait_ms(50);
         
           break;
-
+      case ST7032:
+          _writeByte( 0x1c );   //Internal OSC frequency adjustment 183HZ    bias will be 1/4 
+          wait_us(30);
+          _writeByte( 0x73 );    //Contrast control  low byte
+          wait_us(30);  
+          _writeByte( 0x57 );    //booster circuit is turn on.    /ICON display off. /Contrast control   high byte
+          wait_us(30);
+          _writeByte( 0x6c );  //Follower control
+          wait_us(50);   
+          _writeByte( 0x0c );    //DISPLAY ON
+          wait_us(30);
+          break;
       case WS0010:         
           // WS0010 OLED controller: Initialise DC/DC Voltage converter for LEDs
           // Note: supports 1 or 2 lines (and 16x100 graphics)
@@ -1107,6 +1118,77 @@ void TextLCD_SPI::_setCS(bool value) {
 //---------- End TextLCD_SPI ------------
 
 
+//--------- Start TextLCD_NativeSPI -----------
+
+ /** Create a TextLCD interface using an SPI 74595 portexpander
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param ctrl            LCD controller (default = HD44780)      
+   */
+TextLCD_NativeSPI::TextLCD_NativeSPI(SPI *spi, PinName cs, PinName rs, LCDType type, PinName bl, LCDCtrl ctrl) :
+                         TextLCD_Base(type, ctrl), 
+                         _spi(spi),        
+                         _cs(cs),
+                         _rs(rs) {      
+        
+  // Setup the spi for 8 bit data, low steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+  _spi->format(8,0);
+  _spi->frequency(1000000);    
+  
+  // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
+  if (bl != NC) {
+    _bl = new DigitalOut(bl);   //Construct new pin 
+    _bl->write(0);              //Deactivate    
+  }
+  else {
+    // No Hardware Backlight pin       
+    _bl = NULL;                 //Construct dummy pin     
+  }  
+  
+  _writeByte( 0x39 );  //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot IS=1
+  wait_us(30);
+  _init();
+}
+
+TextLCD_NativeSPI::~TextLCD_NativeSPI() {
+   if (_bl != NULL) {delete _bl;}  // BL pin
+}
+
+// Not used in this mode
+void TextLCD_NativeSPI::_setEnable(bool value) {
+}    
+
+// Set RS pin
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_NativeSPI::_setRS(bool value) {
+    _rs = value;
+}    
+
+// Set BL pin
+void TextLCD_NativeSPI::_setBL(bool value) {
+    if (_bl)
+        _bl->write(value);   
+}    
+
+// Write a byte using SPI
+void TextLCD_NativeSPI::_writeByte(int value) {
+    _cs = 0;
+    wait_us(1);
+    _spi->write(value);
+    wait_us(1);
+    _cs = 1;
+}
+    
+
+// Not used in this mode
+void TextLCD_NativeSPI::_setData(int value) {
+}    
+
+
+//---------- End TextLCD_NativeSPI ------------
 
 
 
