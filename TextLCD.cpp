@@ -9,6 +9,7 @@
  *               2013, v07: WH, Added support for backlight and include portdefinitions for LCD2004 Module from DFROBOT 
  *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined pins 
  *               2014, v09: WH/EO, Added Class for Native SPI controllers such as ST7032 
+ *               2014, v10: WH, Added Class for Native I2C controllers such as ST7032i, Added support for MCP23008 I2C portexpander, Added support for Adafruit module  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -78,9 +79,9 @@ void TextLCD_Base::_init() {
   */
 void TextLCD_Base::_initCtrl() {
 
-    this->_setRS(false);      // command mode
+    this->_setRS(false); // command mode
     
-    wait_ms(20);        // Wait 20ms to ensure powered up
+    wait_ms(20);         // Wait 20ms to ensure powered up
 
     // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)    
     for (int i=0; i<3; i++) {
@@ -111,16 +112,34 @@ void TextLCD_Base::_initCtrl() {
           wait_ms(50);      
           break;
           
-      case ST7032:
+      case ST7032_3V3:
+          // ST7032 controller: Initialise Voltage booster for VLCD. VDD=3V3
+     
           _writeByte( 0x1c );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
           wait_us(30);
-          _writeByte( 0x73 );    //Contrast control  low byte
+          _writeByte( 0x73 );    //Contrast control low byte
           wait_us(30);  
-          _writeByte( 0x57 );    //booster circuit is turn on. /ICON display off. /Contrast control   high byte
+          _writeByte( 0x57 );    //booster circuit is turned on. /ICON display off. /Contrast control high byte
           wait_us(30);
           _writeByte( 0x6c );    //Follower control
           wait_us(50);   
-          _writeByte( 0x0c );    //DISPLAY ON
+          _writeByte( 0x0c );    //DISPLAY ON, not needed
+          wait_us(30);
+          break;
+
+//Check and fix booster disable
+      case ST7032_5V:
+          // ST7032 controller: Disable Voltage booster for VLCD. VDD=5V      
+          
+          _writeByte( 0x1c );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
+          wait_us(30);
+          _writeByte( 0x73 );    //Contrast control low byte
+          wait_us(30);  
+          _writeByte( 0x57 );    //booster circuit is turned on. /ICON display off. /Contrast control high byte
+          wait_us(30);
+          _writeByte( 0x6c );    //Follower control
+          wait_us(50);   
+          _writeByte( 0x0c );    //DISPLAY ON  --> remove, done later?
           wait_us(30);
           break;
           
@@ -858,10 +877,10 @@ TextLCD::~TextLCD() {
 
 //--------- Start TextLCD_I2C -----------
 
-/** Create a TextLCD interface using an I2C PC8574 or PCF8574A portexpander
+/** Create a TextLCD interface using an I2C PC8574 (or PCF8574A) or MCP23008 portexpander
   *
   * @param i2c             I2C Bus
-  * @param deviceAddress   I2C slave address (PCF8574 or PCF8574A, default = 0x40)
+  * @param deviceAddress   I2C slave address (PCF8574, PCF8574A or MCP23008, default = 0x40)
   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
   * @param ctrl            LCD controller (default = HD44780)    
   */
@@ -871,11 +890,35 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
                               
   _slaveAddress = deviceAddress & 0xFE;
   
+
+#if (MCP23008==1)
+  // MCP23008 portexpander Init
+   _write_register(IODIR,   0x00);  // All outputs
+   _write_register(IPOL,    0x00);  // No reverse polarity 
+   _write_register(GPINTEN, 0x00);  // No interrupt 
+   _write_register(DEFVAL,  0x00);  // Default value to compare against for interrupts
+   _write_register(INTCON,  0x00);  // No interrupt on changes 
+   _write_register(IOCON,   0x00);  // Interrupt polarity   
+   _write_register(GPPU,    0x00);  // No Pullup 
+   _write_register(INTF,    0x00);  //    
+   _write_register(INTCAP,  0x00);  //    
+   _write_register(GPIO,    0x00);  // Output/Input pins   
+   _write_register(OLAT,    0x00);  // Output Latch  
+    
   // Init the portexpander bus
   _lcd_bus = D_LCD_BUS_DEF;
   
   // write the new data to the portexpander
+  _write_register(GPIO, _lcd_bus);      
+#else
+  // PCF8574 of PCF8574A portexpander
+
+  // Init the portexpander bus
+  _lcd_bus = D_LCD_BUS_DEF;
+
+  // write the new data to the portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+#endif
 
   _init();
     
@@ -886,34 +929,59 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
 void TextLCD_I2C::_setEnable(bool value) {
 
   if(_ctrl_idx==_LCDCtrl_0) {
-    if (value)
+    if (value) {
       _lcd_bus |= D_LCD_E;     // Set E bit 
-    else                     
+    }  
+    else {                    
       _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+    }  
   }
   else {
-    if (value)
+    if (value) {
       _lcd_bus |= D_LCD_E2;    // Set E2 bit 
-    else                     
+    }  
+    else {
       _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
-    }    
+    }  
+  }    
+
+
+#if (MCP23008==1)
+  // MCP23008 portexpander
+  
+  // write the new data to the portexpander
+  _write_register(GPIO, _lcd_bus);      
+#else
+  // PCF8574 of PCF8574A portexpander
 
   // write the new data to the I2C portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
-
+#endif
 }    
 
 // Set RS pin
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_I2C::_setRS(bool value) {
 
-  if (value)
+  if (value) {
     _lcd_bus |= D_LCD_RS;    // Set RS bit 
-  else                     
+  }  
+  else {                    
     _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+  }
+
+
+#if (MCP23008==1)
+  // MCP23008 portexpander
+  
+  // write the new data to the portexpander
+  _write_register(GPIO, _lcd_bus);      
+#else
+  // PCF8574 of PCF8574A portexpander
 
   // write the new data to the I2C portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+#endif
                   
 }    
 
@@ -921,13 +989,24 @@ void TextLCD_I2C::_setRS(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_I2C::_setBL(bool value) {
 
-  if (value)
+  if (value) {
     _lcd_bus |= D_LCD_BL;    // Set BL bit 
-  else                     
+  }  
+  else {                    
     _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+  }
+  
+#if (MCP23008==1)
+  // MCP23008 portexpander
+  
+  // write the new data to the portexpander
+  _write_register(GPIO, _lcd_bus);      
+#else
+  // PCF8574 of PCF8574A portexpander
 
   // write the new data to the I2C portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+#endif
                  
 }    
 
@@ -941,30 +1020,55 @@ void TextLCD_I2C::_setData(int value) {
   // Set bit by bit to support any mapping of expander portpins to LCD pins
   
   data = value & 0x0F;
-  if (data & 0x01)
+  if (data & 0x01){
     _lcd_bus |= D_LCD_D4;   // Set Databit 
-  else                     
-    _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
+  }  
+  else { 
+    _lcd_bus &= ~D_LCD_D4;  // Reset Databit
+  }  
 
-  if (data & 0x02)
+  if (data & 0x02){
     _lcd_bus |= D_LCD_D5;   // Set Databit 
-  else                     
-    _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_D5;  // Reset Databit
+  }  
 
-  if (data & 0x04)
+  if (data & 0x04) {
     _lcd_bus |= D_LCD_D6;   // Set Databit 
-  else                     
-    _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+  }  
+  else {                    
+    _lcd_bus &= ~D_LCD_D6;  // Reset Databit
+  }  
 
-  if (data & 0x08)
+  if (data & 0x08) {
     _lcd_bus |= D_LCD_D7;   // Set Databit 
-  else                     
-    _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_D7;  // Reset Databit
+  }  
                     
+#if (MCP23008==1)
+  // MCP23008 portexpander
+  
+  // write the new data to the portexpander
+  _write_register(GPIO, _lcd_bus);      
+#else
+  // PCF8574 of PCF8574A portexpander
+
   // write the new data to the I2C portexpander
-  _i2c->write(_slaveAddress, &_lcd_bus, 1);  
+  _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+#endif
                  
 }    
+
+// Write data to MCP23008 I2C portexpander
+void TextLCD_I2C::_write_register (int reg, int value) {
+  char data[] = {reg, value};
+    
+  _i2c->write(_slaveAddress, data, 2);
+ 
+}
 
 //---------- End TextLCD_I2C ------------
 
@@ -1008,16 +1112,20 @@ TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
 void TextLCD_SPI::_setEnable(bool value) {
 
   if(_ctrl_idx==_LCDCtrl_0) {
-    if (value)
+    if (value) {
       _lcd_bus |= D_LCD_E;     // Set E bit 
-    else                     
+    }  
+    else {                    
       _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+    }  
   }
   else {
-    if (value)
+    if (value) {
       _lcd_bus |= D_LCD_E2;    // Set E2 bit 
-    else                     
+    }  
+    else {
       _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
+    }  
   }
                   
   // write the new data to the SPI portexpander
@@ -1073,25 +1181,33 @@ void TextLCD_SPI::_setData(int value) {
   // Set bit by bit to support any mapping of expander portpins to LCD pins
     
   data = value & 0x0F;
-  if (data & 0x01)
+  if (data & 0x01) {
     _lcd_bus |= D_LCD_D4;   // Set Databit 
-  else                     
+  }  
+  else {                    
     _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
-
-  if (data & 0x02)
+  }
+  
+  if (data & 0x02) {
     _lcd_bus |= D_LCD_D5;   // Set Databit 
-  else                     
+  }  
+  else {
     _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
-
-  if (data & 0x04)
+  }
+  
+  if (data & 0x04) {
     _lcd_bus |= D_LCD_D6;   // Set Databit 
-  else                     
+  }  
+  else {
     _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
-
-  if (data & 0x08)
+  }
+  
+  if (data & 0x08) {
     _lcd_bus |= D_LCD_D7;   // Set Databit 
-  else                     
-    _lcd_bus &= ~D_LCD_D7;  // Reset Databit                     
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_D7;  // Reset Databit
+  }  
                     
   // write the new data to the SPI portexpander
   _setCS(false);  
@@ -1125,7 +1241,7 @@ void TextLCD_SPI::_setCS(bool value) {
    * @param rs              Instruction/data control line
    * @param type            Sets the panel size/addressing mode (default = LCD16x2)
    * @param bl              Backlight control line (optional, default = NC)  
-   * @param ctrl            LCD controller (default = ST7032) 
+   * @param ctrl            LCD controller (default = ST7032_3V3) 
    */       
 TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, PinName bl, LCDCtrl ctrl) :
                              TextLCD_Base(type, ctrl), 
@@ -1169,8 +1285,9 @@ void TextLCD_SPI_N::_setRS(bool value) {
 
 // Set BL pin
 void TextLCD_SPI_N::_setBL(bool value) {
-    if (_bl)
+    if (_bl) {
         _bl->write(value);   
+    }    
 }    
 
 // Write a byte using SPI
