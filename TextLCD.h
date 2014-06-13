@@ -38,8 +38,8 @@
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
  * Currently supports 8x1, 8x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
- * Interface options include direct mbed pins, I2C portexpander (PCF8474, PCF8574A, MCP23008) or SPI bus shiftregister (74595)
- * Supports some controllers that provide internal DC/DC converters for VLCD or VLED. 
+ * Interface options include direct mbed pins, I2C portexpander (PCF8474/PCF8574A or MCP23008) or SPI bus shiftregister (74595). 
+ * Supports some controllers with native I2C or SP interface. Supports some controllers that provide internal DC/DC converters for VLCD or VLED. 
  *
  * @code
  * #include "mbed.h"
@@ -55,7 +55,7 @@
  * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);                    // SPI bus, CS pin, LCD Type  
  * TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4);                  // I2C bus, PCF8574 Slaveaddress, LCD Type
  * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
- * //TextLCD_SPI_N lcd(&spi_lcd, p8, p9);                                // SPI bus, CS pin, RS pin, LCDType=LCD16x2, BL=NC, LCDTCtrl=ST7032   
+ * //TextLCD_SPI_N lcd(&spi_lcd, p8, p9);                                // SPI bus, CS pin, RS pin, LCDType=LCD16x2, BL=NC, LCDTCtrl=ST7032_3V3   
  * 
  * int main() {
  *   lcd.printf("Hello World!\n");
@@ -68,8 +68,8 @@
 //LCD and serial portexpanders should be wired accordingly 
 //
 //Select Hardware module (one option only)
-#define DEFAULT        1
-#define ADAFRUIT       0
+#define DEFAULT        0
+#define ADAFRUIT       1
 #define DFROBOT        0
 
 
@@ -251,7 +251,7 @@ const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
  * @brief Currently supports 8x1, 8x2, 12x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
- *        Interface options include direct mbed pins, I2C portexpander (PCF8474, PCF8574A) or SPI bus shiftregister (74595) and some native I2C or SPI devices 
+ *        Interface options include direct mbed pins, I2C portexpander (PCF8474/PCF8574A or MCP23008) or SPI bus shiftregister (74595) and some native I2C or SPI devices 
  *
  */
 class TextLCD_Base : public Stream {
