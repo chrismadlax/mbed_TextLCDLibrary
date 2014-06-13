@@ -49,28 +49,25 @@ void TextLCD_Base::_init() {
   
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
-    _ctrl_idx=_LCDCtrl_1; // Select 2nd controller
+    _ctrl_idx=_LCDCtrl_1;        // Select 2nd controller
     
-    _initCtrl();                   // Init 2nd controller
+    _initCtrl();                 // Init 2nd controller
     
     // Secondary LCD controller Clearscreen
-    _writeCommand(0x01);       // cls, and set cursor to 0    
+    _writeCommand(0x01);         // cls, and set cursor to 0    
     wait_ms(10);     // The CLS command takes 1.64 ms.
-                     // Since we are not using the Busy flag, Lets be safe and take 10 ms
-    
+                     // Since we are not using the Busy flag, Lets be safe and take 10 ms   
   }
     
   // Select and configure primary LCD controller
-  _ctrl_idx=_LCDCtrl_0; // Select primary controller  
+  _ctrl_idx=_LCDCtrl_0;          // Select primary controller  
 
   _initCtrl();                   // Init primary controller
   
   // Primary LCD controller Clearscreen
-  _writeCommand(0x01);       // cls, and set cursor to 0
-
+  _writeCommand(0x01);           // cls, and set cursor to 0
   wait_ms(10);     // The CLS command takes 1.64 ms.
-                   // Since we are not using the Busy flag, Lets be safe and take 10 ms
-    
+                   // Since we are not using the Busy flag, Lets be safe and take 10 ms    
 } 
 
 /**  Init the LCD controller
@@ -92,54 +89,68 @@ void TextLCD_Base::_initCtrl() {
     wait_us(40);         // most instructions take 40us
 
     // Display is now in 4-bit mode
+    // Note: 4 bit mode is ignored for native SPI and I2C devices
    
     // Device specific initialisations for DC/DC converter to generate VLCD or VLED
     switch (_ctrl) {
       case ST7036:
           // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
           // Note: supports 1,2 or 3 lines
-          _writeByte( 0x29 );    // 4-bit Databus, 2 Lines, Select Instruction table 1
+          _writeByte( 0x29 );    // 4-bit Databus, 2 Lines, Select Instruction Set = 1
           wait_ms(30);           // > 26,3ms 
           _writeByte( 0x14 );    // Bias: 1/5, 2-Lines LCD 
           wait_ms(30);           // > 26,3ms
           _writeByte( 0x55 );    // Icon off, Booster on, Set Contrast C5, C4
           wait_ms(30);           // > 26,3ms
-          _writeByte( 0x6d );    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
+          _writeByte( 0x6D );    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
           wait_ms(200);          // > 200ms!
           _writeByte( 0x78 );    // Set Contrast C3, C2, C1, C0
           wait_ms(30);           // > 26,3ms
-          _writeByte( 0x28 );    // Return to Instruction table 0
+          _writeByte( 0x28 );    // Return to Instruction Set = 0
           wait_ms(50);      
           break;
           
       case ST7032_3V3:
           // ST7032 controller: Initialise Voltage booster for VLCD. VDD=3V3
-     
-          _writeByte( 0x1c );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
+
+//          _writeByte( 0x39 );    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Select Instruction Set = 1
+          _writeByte( 0x29 );    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
+                                 //Note: 4 bit mode is ignored for native SPI and I2C devices
+          wait_us(30);     
+          _writeByte( 0x1C );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
           wait_us(30);
           _writeByte( 0x73 );    //Contrast control low byte
           wait_us(30);  
           _writeByte( 0x57 );    //booster circuit is turned on. /ICON display off. /Contrast control high byte
           wait_us(30);
-          _writeByte( 0x6c );    //Follower control
+          _writeByte( 0x6C );    //Follower control
           wait_us(50);   
-          _writeByte( 0x0c );    //DISPLAY ON, not needed
+//          _writeByte( 0x0C );    //DISPLAY ON, not needed
+//          _writeByte( 0x38 );    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Return to Instruction Set = 0        
+          _writeByte( 0x28 );    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                  
+                                 //Note: 4 bit mode is ignored for native SPI and I2C devices                   
           wait_us(30);
           break;
 
 //Check and fix booster disable
       case ST7032_5V:
           // ST7032 controller: Disable Voltage booster for VLCD. VDD=5V      
-          
-          _writeByte( 0x1c );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
+//          _writeByte( 0x39 );    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Instruction Set = 1
+          _writeByte( 0x29 );    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
+                                 //Note: 4 bit mode is ignored for native SPI and I2C devices         
+          wait_us(30);               
+          _writeByte( 0x1C );    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
           wait_us(30);
           _writeByte( 0x73 );    //Contrast control low byte
           wait_us(30);  
           _writeByte( 0x57 );    //booster circuit is turned on. /ICON display off. /Contrast control high byte
           wait_us(30);
-          _writeByte( 0x6c );    //Follower control
+          _writeByte( 0x6C );    //Follower control
           wait_us(50);   
-          _writeByte( 0x0c );    //DISPLAY ON  --> remove, done later?
+//          _writeByte( 0x0C );    //DISPLAY ON  --> remove, done later?
+//          _writeByte( 0x38 );    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Instruction Set = 0                  
+          _writeByte( 0x28 );    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                            
+                                 //Note: 4 bit mode is ignored for native SPI and I2C devices                   
           wait_us(30);
           break;
           
@@ -208,7 +219,8 @@ void TextLCD_Base::_initCtrl() {
 // All other LCD types are initialised as 2 Line displays (including LCD40x4)
         default:
             _writeCommand(0x28); // Function set 001 DL N F - -
-                                 //  DL=0 (4 bits bus) 
+                                 //  DL=0 (4 bits bus)
+                                 //  Note: 4 bit mode is ignored for native SPI and I2C devices                                 
                                  //   N=1 (2 lines)
                                  //   F=0 (5x7 dots font, only option for 2 line display)
                                  //    -  (Don't care)                                
@@ -240,8 +252,7 @@ void TextLCD_Base::cls() {
     _setCursorAndDisplayMode(_currentMode, CurOff_BlkOff);
 
     // Second LCD controller Clearscreen
-    _writeCommand(0x01); // cls, and set cursor to 0    
-
+    _writeCommand(0x01);  // cls, and set cursor to 0    
     wait_ms(10);     // The CLS command takes 1.64 ms.
                      // Since we are not using the Busy flag, Lets be safe and take 10 ms
 
@@ -250,8 +261,7 @@ void TextLCD_Base::cls() {
   }
   
   // Primary LCD controller Clearscreen
-  _writeCommand(0x01); // cls, and set cursor to 0
-
+  _writeCommand(0x01);    // cls, and set cursor to 0
   wait_ms(10);     // The CLS command takes 1.64 ms.
                    // Since we are not using the Busy flag, Lets be safe and take 10 ms
 
@@ -893,17 +903,17 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
 
 #if (MCP23008==1)
   // MCP23008 portexpander Init
-   _write_register(IODIR,   0x00);  // All outputs
-   _write_register(IPOL,    0x00);  // No reverse polarity 
-   _write_register(GPINTEN, 0x00);  // No interrupt 
-   _write_register(DEFVAL,  0x00);  // Default value to compare against for interrupts
-   _write_register(INTCON,  0x00);  // No interrupt on changes 
-   _write_register(IOCON,   0x00);  // Interrupt polarity   
-   _write_register(GPPU,    0x00);  // No Pullup 
-   _write_register(INTF,    0x00);  //    
-   _write_register(INTCAP,  0x00);  //    
-   _write_register(GPIO,    0x00);  // Output/Input pins   
-   _write_register(OLAT,    0x00);  // Output Latch  
+  _write_register(IODIR,   0x00);  // All outputs
+  _write_register(IPOL,    0x00);  // No reverse polarity 
+  _write_register(GPINTEN, 0x00);  // No interrupt 
+  _write_register(DEFVAL,  0x00);  // Default value to compare against for interrupts
+  _write_register(INTCON,  0x00);  // No interrupt on changes 
+  _write_register(IOCON,   0x00);  // Interrupt polarity   
+  _write_register(GPPU,    0x00);  // No Pullup 
+  _write_register(INTF,    0x00);  //    
+  _write_register(INTCAP,  0x00);  //    
+  _write_register(GPIO,    0x00);  // Output/Input pins   
+  _write_register(OLAT,    0x00);  // Output Latch  
     
   // Init the portexpander bus
   _lcd_bus = D_LCD_BUS_DEF;
@@ -1264,8 +1274,6 @@ TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, Pin
     _bl = NULL;                 //Construct dummy pin     
   }  
   
-  _writeByte( 0x39 );  //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot IS=1
-  wait_us(30);
   _init();
 }
 
