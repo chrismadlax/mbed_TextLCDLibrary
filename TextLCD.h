@@ -52,10 +52,11 @@
  * SPI spi_lcd(p5, NC, p7); // MOSI, MISO, SCLK
  *
  * //TextLCD lcd(p15, p16, p17, p18, p19, p20);                          // RS, E, D4-D7, LCDType=LCD16x2, BL=NC, E2=NC, LCDTCtrl=HD44780
- * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);                    // SPI bus, CS pin, LCD Type  
+ * //TextLCD_SPI lcd(&spi_lcd, p8, TextLCD::LCD40x4);                    // SPI bus, 74595 expander, CS pin, LCD Type  
  * TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD20x4);                  // I2C bus, PCF8574 Slaveaddress, LCD Type
  * //TextLCD_I2C lcd(&i2c_lcd, 0x42, TextLCD::LCD16x2, TextLCD::WS0010); // I2C bus, PCF8574 Slaveaddress, LCD Type, Device Type
  * //TextLCD_SPI_N lcd(&spi_lcd, p8, p9);                                // SPI bus, CS pin, RS pin, LCDType=LCD16x2, BL=NC, LCDTCtrl=ST7032_3V3   
+ * //TextLCD_I2C_N lcd(&i2c_lcd, ST7032_SA, TextLCD::LCD16x2, NC, TextLCD::ST7032_3V3); // I2C bus, Slaveaddress, LCD Type, BL=NC, LCDTCtrl=ST7032_3V3  
  * 
  * int main() {
  *   lcd.printf("Hello World!\n");
@@ -68,8 +69,8 @@
 //LCD and serial portexpanders should be wired accordingly 
 //
 //Select Hardware module (one option only)
-#define DEFAULT        0
-#define ADAFRUIT       1
+#define DEFAULT        1
+#define ADAFRUIT       0
 #define DFROBOT        0
 
 
@@ -247,6 +248,15 @@ const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // 
 //const char udc_bar_4[]  = {0x17, 0x17, 0x17, 0x17, 0x17, 0x17, 0x17, 0x00};  // Bar 1111
 //const char udc_bar_5[]  = {0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Bar 11111
 
+//const char udc_ch_1[]  =  {0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00};  // Hor bars 4
+//const char udc_ch_2[]  =  {0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f};  // Hor bars 4 (inverted)
+//const char udc_ch_3[]  =  {0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15};  // Ver bars 3
+//const char udc_ch_4[]  =  {0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a};  // Ver bars 3 (inverted)
+//const char udc_ch_yr[] =  {0x08, 0x0f, 0x12, 0x0f, 0x0a, 0x1f, 0x02, 0x02};  // Year   (kanji)
+//const char udc_ch_mo[] =  {0x0f, 0x09, 0x0f, 0x09, 0x0f, 0x09, 0x09, 0x13};  // Month  (kanji)
+//const char udc_ch_dy[] =  {0x1f, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11, 0x1F};  // Day    (kanji)
+//const char udc_ch_mi[] =  {0x0C, 0x0a, 0x11, 0x1f, 0x09, 0x09, 0x09, 0x13};  // minute (kanji)
+
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
@@ -263,10 +273,13 @@ public:
         LCD8x2,     /**<  8x2 LCD panel */          
         LCD8x2B,    /**<  8x2 LCD panel (actually 16x1) */                  
         LCD12x2,    /**< 12x2 LCD panel */                          
+//        LCD12x3,    /**< 12x3 LCD panel, special mode PCF21XX */                                  
         LCD12x4,    /**< 12x4 LCD panel */                  
+//        LCD12x4B,   /**< 12x4 LCD panel, special mode PCF21XX */                                          
         LCD16x1,    /**< 16x1 LCD panel (actually 8x2) */          
         LCD16x2,    /**< 16x2 LCD panel (default) */
         LCD16x2B,   /**< 16x2 LCD panel alternate addressing */
+//        LCD16x3,    /**< 16x3 LCD panel, special mode ST7036 */                
         LCD16x4,    /**< 16x4 LCD panel */        
         LCD20x2,    /**< 20x2 LCD panel */
         LCD20x4,    /**< 20x4 LCD panel */
@@ -278,11 +291,13 @@ public:
 
     /** LCD Controller Device */
     enum LCDCtrl {
-        HD44780,    /**<  HD44780 (default)       */    
-        WS0010,     /**<  WS0010 OLED Controller  */    
-        ST7036,     /**<  ST7036                  */   
-        ST7032_3V3, /**<  ST7032 3V3 with Booster */   
-        ST7032_5V   /**<  ST7032 5V  no Booster   */           
+        HD44780,    /**<  HD44780 (default)        */    
+        WS0010,     /**<  WS0010  OLED Controller  */    
+        ST7036,     /**<  ST7036  3V3 with Booster */   
+        ST7032_3V3, /**<  ST7032  3V3 with Booster */   
+        ST7032_5V   /**<  ST7032  5V no Booster    */           
+//        PCF210X,    /**<  PCF210X 5V no Booster    */                   
+//        PCF211X     /**<  PCF211X 3V3 with Booster */                           
     };
 
 
@@ -639,11 +654,12 @@ public:
     /** Create a TextLCD interface using a controller with native I2C interface
      *
      * @param i2c             I2C Bus
-     * @param deviceAddress   I2C slave address (default = 0x)  
+     * @param deviceAddress   I2C slave address (default = ST7032_SA = 0x7C)  
      * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+     * @param bl              Backlight control line (optional, default = NC)       
      * @param ctrl            LCD controller (default = ST7032_3V3)                     
      */
-    TextLCD_I2C_N(I2C *i2c, char deviceAddress = 0x40, LCDType type = LCD16x2, LCDCtrl ctrl = ST7032_3V3);
+    TextLCD_I2C_N(I2C *i2c, char deviceAddress = ST7032_SA, LCDType type = LCD16x2, PinName bl = NC, LCDCtrl ctrl = ST7032_3V3);
     virtual ~TextLCD_I2C_N(void);
 
 private:
@@ -657,8 +673,10 @@ private:
     I2C *_i2c;
     char _slaveAddress;
     
-// Internal bus mirror value for serial bus only
-    char _lcd_bus;   
+// controlbyte to select between data and command. Internal value for serial bus only
+    char _controlbyte;   
+    
+    DigitalOut *_bl;    
 };
 
 //---------- End TextLCD_I2C_N ------------
