@@ -10,6 +10,7 @@
  *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined pins 
  *               2014, v09: WH/EO, Added Class for Native SPI controllers such as ST7032 
  *               2014, v10: WH, Added Class for Native I2C controllers such as ST7032i, Added support for MCP23008 I2C portexpander, Added support for Adafruit module  
+ *               2014, v11: WH, Added support for native I2C controllers such as PCF21XX, improved the _initCtrl() method to deal with differences between all supported controllers  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,6 +33,11 @@
 
 #include "TextLCD.h"
 #include "mbed.h"
+
+
+DigitalOut led1(LED1);
+DigitalOut led2(LED2);
+
 
 /** Create a TextLCD_Base interface
   *
@@ -86,76 +92,281 @@ void TextLCD_Base::_initCtrl() {
     // Display is now in 4-bit mode
     // Note: 4 bit mode is ignored for native SPI and I2C devices
    
-    // Device specific initialisations for DC/DC converter to generate VLCD or VLED
+    // Device specific initialisations: DC/DC converter to generate VLCD or VLED, number of lines etc
     switch (_ctrl) {
-      case ST7036:
-          // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
-          // Note: supports 1,2 or 3 lines
-          _writeCommand(0x29);    // 4-bit Databus, 2 Lines, Select Instruction Set = 1
-          wait_ms(30);            // > 26,3ms 
-          _writeCommand(0x14);    // Bias: 1/5, 2-Lines LCD 
-//          _writeCommand(0x15);    // Bias: 1/5, 3-Lines LCD           
-          wait_ms(30);            // > 26,3ms
-          _writeCommand(0x55);    // Icon off, Booster on, Set Contrast C5, C4
-          wait_ms(30);            // > 26,3ms
-          _writeCommand(0x6D);    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
-          wait_ms(200);           // > 200ms!
-          _writeCommand(0x78);    // Set Contrast C3, C2, C1, C0
-          wait_ms(30);            // > 26,3ms
-          _writeCommand(0x28);    // Return to Instruction Set = 0
-          wait_ms(50);      
-          break;
-          
+      case KS0078:
+
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:                                            
+            case LCD24x1:
+//@TODO check config
+              _writeCommand(0x20); // Function set 001 DL N F - -
+                                   //  DL=0 (4 bits bus)             
+                                   //   N=0 (1 line)
+                                   //   F=0 (5x7 dots font)
+              break;                                
+
+            case LCD24x4B:
+              // Special mode for KS0078
+              _writeCommand(0x2A); // Function set 001 DL N RE DH REV
+                                   //   DL=0  (4 bits bus)             
+                                   //    N=1  (Dont care for KS0078)
+                                   //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                   //   DH=1  (Disp shift, special mode for KS0078)                                
+                                   //   REV=0 (Reverse, special mode for KS0078)
+
+              _writeCommand(0x2E); // Function set 001 DL N RE DH REV
+                                   //   DL=0  (4 bits bus)             
+                                   //    N=1  (Dont care for KS0078)
+                                   //   RE=1  (Ena Extended Regs, special mode for KS0078)
+                                   //   DH=1  (Disp shift, special mode for KS0078)                                
+                                   //   REV=0 (Reverse, special mode for KS0078)
+
+              _writeCommand(0x09); // Ext Function set 0000 1 FW BW NW
+                                   //   FW=0  (5-dot font, special mode for KS0078)
+                                   //   BW=0  (Cur BW invert disable, special mode for KS0078)
+                                   //   NW=1  (4 Line, special mode for KS0078)                                
+
+              _writeCommand(0x2A); // Function set 001 DL N RE DH REV
+                                   //   DL=0  (4 bits bus)             
+                                   //    N=1  (Dont care for KS0078)
+                                   //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                   //   DH=1  (Disp shift, special mode for KS0078)                                
+                                   //   REV=0 (Reverse, special mode for KS0078)
+                                                  
+            // All other LCD types are initialised as 2 Line displays (including LCD40x4)
+            default:
+//@TODO check config            
+              _writeCommand(0x28); // Function set 001 DL N F - -
+                                   //  DL=0 (4 bits bus)
+                                   //  Note: 4 bit mode is ignored for native SPI and I2C devices                                 
+                                   //   N=1 (2 lines)
+                                   //   F=0 (5x7 dots font, only option for 2 line display)
+                                   //    -  (Don't care)                                
+            
+              break;
+          } // switch type
+
+          break; // case KS0078 Controller
+              
       case ST7032_3V3:
           // ST7032 controller: Initialise Voltage booster for VLCD. VDD=3V3
 
-//          _writeCommand(0x39);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Select Instruction Set = 1
-          _writeCommand(0x29);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
-                                  //Note: 4 bit mode is ignored for native SPI and I2C devices
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:                                            
+            case LCD24x1:                    
 
-          _writeCommand(0x1C);    //Internal OSC frequency adjustment Framefreq=183HZ, bias will be 1/4 
+//              _writeCommand(0x31);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Select Instruction Set = 1
+              _writeCommand(0x21);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Select Instruction Set = 1
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices
 
-          _writeCommand(0x73);    //Contrast control low byte
+              _writeCommand(0x1C);    //Internal OSC frequency adjustment Framefreq=183HZ, bias will be 1/4 
 
-          _writeCommand(0x57);    //booster circuit is turned on. /ICON display off. /Contrast control high byte
-          wait_ms(10);            // Wait 10ms to ensure powered up
+              _writeCommand(0x73);    //Contrast control low byte
+
+              _writeCommand(0x57);    //booster circuit is turned on. /ICON display off. /Contrast control high byte
+              wait_ms(10);            // Wait 10ms to ensure powered up
           
-          _writeCommand(0x6C);    //Follower control
-          wait_ms(10);            // Wait 10ms to ensure powered up
+              _writeCommand(0x6C);    //Follower control
+              wait_ms(10);            // Wait 10ms to ensure powered up
           
-//          _writeCommand(0x38);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Return to Instruction Set = 0        
-          _writeCommand(0x28);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                  
-                                  //Note: 4 bit mode is ignored for native SPI and I2C devices    
-                                  
-          _writeCommand(0x14);    // Cursor or Display shift 0001 S/C R/L x x 
-                                  //   S/C=0 Cursor moves
-                                  //   R/L=1 Right
-                                  //    
-          break;
+//              _writeCommand(0x30);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Return to Instruction Set = 0        
+              _writeCommand(0x20);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Return to Instruction Set = 0                  
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
+
+              break;  
+
+            default:
+              // All other LCD types are initialised as 2 Line displays        
+                                    
+//              _writeCommand(0x39);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Select Instruction Set = 1
+              _writeCommand(0x29);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices
+
+              _writeCommand(0x1C);    //Internal OSC frequency adjustment Framefreq=183HZ, bias will be 1/4 
+
+              _writeCommand(0x73);    //Contrast control low byte
+
+              _writeCommand(0x57);    //booster circuit is turned on. /ICON display off. /Contrast control high byte
+              wait_ms(10);            // Wait 10ms to ensure powered up
+          
+              _writeCommand(0x6C);    //Follower control
+              wait_ms(10);            // Wait 10ms to ensure powered up
+          
+//              _writeCommand(0x38);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Return to Instruction Set = 0        
+              _writeCommand(0x28);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                  
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
+          } // switch type    
+                                     
+          break; // case ST7032_3V3 Controller
 
 
       case ST7032_5V:
           // ST7032 controller: Disable Voltage booster for VLCD. VDD=5V      
-//          _writeCommand(0x39);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Instruction Set = 1
-          _writeCommand(0x29);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
-                                  //Note: 4 bit mode is ignored for native SPI and I2C devices         
 
-          _writeCommand(0x1C);    //Internal OSC frequency adjustment 183HZ, bias will be 1/4 
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:                                            
+            case LCD24x1:                    
 
-          _writeCommand(0x73);    //Contrast control low byte
+//              _writeCommand(0x31);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Select Instruction Set = 1
+              _writeCommand(0x21);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Select Instruction Set = 1
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices
 
-          _writeCommand(0x53);    //booster circuit is turned off. /ICON display off. /Contrast control high byte
-          wait_ms(10);            // Wait 10ms to ensure powered up
+              _writeCommand(0x1C);    //Internal OSC frequency adjustment Framefreq=183HZ, bias will be 1/4 
+
+              _writeCommand(0x73);    //Contrast control low byte
+
+              _writeCommand(0x53);    //booster circuit is turned off. /ICON display off. /Contrast control high byte
+              wait_ms(10);            // Wait 10ms to ensure powered up
           
-          _writeCommand(0x6C);    //Follower control
-          wait_ms(10);            // Wait 10ms to ensure powered up
+              _writeCommand(0x6C);    //Follower control
+              wait_ms(10);            // Wait 10ms to ensure powered up
           
-//          _writeCommand(0x38);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Instruction Set = 0                  
-          _writeCommand(0x28);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                            
-                                  //Note: 4 bit mode is ignored for native SPI and I2C devices                   
+//              _writeCommand(0x30);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Return to Instruction Set = 0        
+              _writeCommand(0x20);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Return to Instruction Set = 0                  
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
 
-          break;
+              break;  
+
+            default:
+              // All other LCD types are initialised as 2 Line displays        
+                                    
+//              _writeCommand(0x39);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Select Instruction Set = 1
+              _writeCommand(0x29);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices
+
+              _writeCommand(0x1C);    //Internal OSC frequency adjustment Framefreq=183HZ, bias will be 1/4 
+
+              _writeCommand(0x73);    //Contrast control low byte
+
+              _writeCommand(0x53);    //booster circuit is turned off. /ICON display off. /Contrast control high byte
+              wait_ms(10);            // Wait 10ms to ensure powered up
           
+              _writeCommand(0x6C);    //Follower control
+              wait_ms(10);            // Wait 10ms to ensure powered up
+          
+//              _writeCommand(0x38);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Return to Instruction Set = 0        
+              _writeCommand(0x28);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                  
+                                      //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
+          } // switch type    
+                                    
+          break; // case ST7032_5V Controller
+
+      case ST7036:
+          // ST7036 controller: Initialise Voltage booster for VLCD. VDD=5V
+          // Note: supports 1,2 or 3 lines
+          
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:   
+            case LCD24x1:                                                                         
+              _writeCommand(0x21);    // 4-bit Databus, N=0 1 Line, DH=0 5x7font, IS2,IS1 = 01 Select Instruction Set = 1
+              wait_ms(30);            // > 26,3ms 
+              _writeCommand(0x14);    // Bias: 1/5, 1 or 2-Lines LCD 
+//              _writeCommand(0x15);    // Bias: 1/5, 3-Lines LCD           
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x55);    // Icon off, Booster on, Set Contrast C5, C4
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x6D);    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
+              wait_ms(200);           // > 200ms!
+              _writeCommand(0x78);    // Set Contrast C3, C2, C1, C0
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x20);    // Return to Instruction Set = 0
+              wait_ms(50);      
+              break;  
+#if(0)
+//            case LCD12x3:                                            
+            case LCD16x3:                                            
+              _writeCommand(0x29);    // 4-bit Databus, N=1 2 Line, DH=0 5x7font, IS2,IS1 = 01 Select Instruction Set = 1
+              wait_ms(30);            // > 26,3ms 
+//              _writeCommand(0x14);    // Bias: 1/5, 1 or 2-Lines LCD 
+              _writeCommand(0x15);    // Bias: 1/5, 3-Lines LCD           
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x55);    // Icon off, Booster on, Set Contrast C5, C4
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x6D);    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
+              wait_ms(200);           // > 200ms!
+              _writeCommand(0x78);    // Set Contrast C3, C2, C1, C0
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x28);    // Return to Instruction Set = 0
+              wait_ms(50);      
+              break;  
+#endif
+            default:
+              // All other LCD types are initialised as 2 Line displays        
+              _writeCommand(0x29);    // 4-bit Databus, N=1 2 Line, DH=0 5x7font, IS2,IS1 = 01 Select Instruction Set = 1              
+              wait_ms(30);            // > 26,3ms 
+              _writeCommand(0x14);    // Bias: 1/5, 2-Lines LCD 
+//             _writeCommand(0x15);    // Bias: 1/5, 3-Lines LCD           
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x55);    // Icon off, Booster on, Set Contrast C5, C4
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x6D);    // Voltagefollower On, Ampl ratio Rab2, Rab1, Rab0
+              wait_ms(200);           // > 200ms!
+              _writeCommand(0x78);    // Set Contrast C3, C2, C1, C0
+              wait_ms(30);            // > 26,3ms
+              _writeCommand(0x28);    // Return to Instruction Set = 0
+              wait_ms(50);      
+          } // switch type
+          
+          break; // case ST7036 Controller
+          
+      case PCF21XX_3V3:
+          // PCF21XX controller: Initialise Voltage booster for VLCD. VDD=3V3
+
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:                                            
+            case LCD24x1:                    
+              _writeCommand(0x22);    //FUNCTION SET 4 bit, N=0/M=0 1-line/24 chars display mode, G=1 Booster on                               
+                                      //Note: 4 bit mode is ignored for I2C mode
+              wait_ms(10);            // Wait 10ms to ensure powered up                                                    
+              break;  
+
+            case LCD12x3B:                    
+            case LCD12x4B:                                
+              _writeCommand(0x2E);    //FUNCTION SET 4 bit, N=1/M=1 4-line/12 chars display mode, G=1 Booster on                               
+                                      //Note: 4 bit mode is ignored for I2C mode              
+              wait_ms(10);            // Wait 10ms to ensure powered up                                                    
+              break;  
+              
+            default:
+              // All other LCD types are initialised as 2 Line displays        
+              _writeCommand(0x2A);    //FUNCTION SET 4 bit, N=1/M=0 2-line/24 chars display mode, G=1 Booster on
+                                      //Note: 4 bit mode is ignored for I2C mode
+
+              wait_ms(10);            // Wait 10ms to ensure powered up   
+              
+              
+              led1=!led1;
+          } // switch type    
+
+
+          break; // case PCF21XX_3V3 Controller
+
+
+//      case PCF21XX_5V:
+          // PCF21XX controller: No Voltage booster for VLCD. VDD=5V
+                              
+
       case WS0010:         
           // WS0010 OLED controller: Initialise DC/DC Voltage converter for LEDs
           // Note: supports 1 or 2 lines (and 16x100 graphics)
@@ -170,66 +381,68 @@ void TextLCD_Base::_initCtrl() {
           _writeCommand(0x17);   // DC/DC on        
           wait_ms(10);           // Wait 10ms to ensure powered up
           
-          break;
-        
+
+          // Initialise Display configuration
+          switch (_type) {                    
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:                                            
+//            case LCD24x1:
+              _writeCommand(0x20); // Function set 001 DL N F - -
+                                   //  DL=0 (4 bits bus)             
+                                   //   N=0 (1 line)
+                                   //   F=0 (5x7 dots font)
+              break;  
+
+            default:
+              // All other LCD types are initialised as 2 Line displays (including LCD40x4)       
+              _writeCommand(0x28); // Function set 001 DL N F - -
+                                   //  DL=0 (4 bits bus)
+                                   //   N=1 (2 lines)
+                                   //   F=0 (5x7 dots font, only option for 2 line display)
+                                   //    -  (Don't care)                                
+          
+              break;
+           } // switch type
+           
+           break; // case WS0100 Controller
+           
         default:
-          // Devices that do not use DC/DC Voltage converters but external VLCD
-          break;                  
-    }
+          // Devices fully compatible to HD44780 that do not use any DC/DC Voltage converters but external VLCD
+
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2B is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:                                            
+            case LCD24x1:
+              _writeCommand(0x20); // Function set 001 DL N F - -
+                                   //  DL=0 (4 bits bus)             
+                                   //   N=0 (1 line)
+                                   //   F=0 (5x7 dots font)
+              break;                                
+                                                  
+            // All other LCD types are initialised as 2 Line displays (including LCD40x4)
+            default:
+              _writeCommand(0x28); // Function set 001 DL N F - -
+                                   //  DL=0 (4 bits bus)
+                                   //  Note: 4 bit mode is ignored for native SPI and I2C devices                                 
+                                   //   N=1 (2 lines)
+                                   //   F=0 (5x7 dots font, only option for 2 line display)
+                                   //    -  (Don't care)                                
+            
+              break;
+          } // switch type
+
+          break; // case default Controller
+          
+    } // switch Controller specific initialisations 
     
-    // Initialise Display configuration
-    switch (_type) {
-        case LCD8x1:
-        case LCD8x2B:        
-            //8x1 is a regular 1 line display
-            //8x2B is a special case of 16x1
-            _writeCommand(0x20); // Function set 001 DL N F - -
-                                 //  DL=0 (4 bits bus)             
-                                 //   N=0 (1 line)
-                                 //   F=0 (5x7 dots font)
-            break;                                
-            
-        case LCD24x4:
-            // Special mode for KS0078
-            _writeCommand(0x2A); // Function set 001 DL N RE DH REV
-                                 //   DL=0  (4 bits bus)             
-                                 //    N=1  (Dont care for KS0078)
-                                 //   RE=0  (Extended Regs, special mode for KS0078)
-                                 //   DH=1  (Disp shift, special mode for KS0078)                                
-                                 //   REV=0 (Reverse, special mode for KS0078)
 
-            _writeCommand(0x2E); // Function set 001 DL N RE DH REV
-                                 //   DL=0  (4 bits bus)             
-                                 //    N=1  (Dont care for KS0078)
-                                 //   RE=1  (Ena Extended Regs, special mode for KS0078)
-                                 //   DH=1  (Disp shift, special mode for KS0078)                                
-                                 //   REV=0 (Reverse, special mode for KS0078)
-
-            _writeCommand(0x09); // Ext Function set 0000 1 FW BW NW
-                                 //   FW=0  (5-dot font, special mode for KS0078)
-                                 //   BW=0  (Cur BW invert disable, special mode for KS0078)
-                                 //   NW=1  (4 Line, special mode for KS0078)                                
-
-            _writeCommand(0x2A); // Function set 001 DL N RE DH REV
-                                 //   DL=0  (4 bits bus)             
-                                 //    N=1  (Dont care for KS0078)
-                                 //   RE=0  (Dis. Extended Regs, special mode for KS0078)
-                                 //   DH=1  (Disp shift, special mode for KS0078)                                
-                                 //   REV=0 (Reverse, special mode for KS0078)
-            break;
-                                            
-// All other LCD types are initialised as 2 Line displays (including LCD40x4)
-        default:
-            _writeCommand(0x28); // Function set 001 DL N F - -
-                                 //  DL=0 (4 bits bus)
-                                 //  Note: 4 bit mode is ignored for native SPI and I2C devices                                 
-                                 //   N=1 (2 lines)
-                                 //   F=0 (5x7 dots font, only option for 2 line display)
-                                 //    -  (Don't care)                                
-            
-            break;
-    }
-
+    // Controller general initialisations
+                                           
     _writeCommand(0x01); // cls, and set cursor to 0
     wait_ms(10);         // The CLS command takes 1.64 ms.
                          // Since we are not using the Busy flag, Lets be safe and take 10 ms  
@@ -242,10 +455,17 @@ void TextLCD_Base::_initCtrl() {
                          //   I/D=1 (Cur incr)
                          //     S=0 (No display shift)                        
 
+    _writeCommand(0x14); // Cursor or Display shift 0001 S/C R/L x x 
+                         //   S/C=0 Cursor moves
+                         //   R/L=1 Right
+                         // 
+
+
 //    _writeCommand(0x0C); // Display Ctrl 0000 1 D C B
 //                         //   Display On, Cursor Off, Blink Off   
     setCursor(CurOff_BlkOff);     
     setMode(DispOn);     
+    led2=!led2;    
 }
 
 
@@ -262,28 +482,31 @@ void TextLCD_Base::cls() {
 
     // Second LCD controller Clearscreen
     _writeCommand(0x01);  // cls, and set cursor to 0    
-    wait_ms(10);     // The CLS command takes 1.64 ms.
-                     // Since we are not using the Busy flag, Lets be safe and take 10 ms
+    wait_ms(10);          // The CLS command takes 1.64 ms.
+                          // Since we are not using the Busy flag, Lets be safe and take 10 ms
   
     _ctrl_idx=_LCDCtrl_0; // Select primary controller
   }
   
   // Primary LCD controller Clearscreen
   _writeCommand(0x01);    // cls, and set cursor to 0
-  wait_ms(10);     // The CLS command takes 1.64 ms.
-                   // Since we are not using the Busy flag, Lets be safe and take 10 ms
+  wait_ms(10);            // The CLS command takes 1.64 ms.
+                          // Since we are not using the Busy flag, Lets be safe and take 10 ms
 
   // Restore cursormode on primary LCD controller when needed
   if(_type==LCD40x4) {
     _setCursorAndDisplayMode(_currentMode,_currentCursor);     
   }
                    
-  _row=0;          // Reset Cursor location
-  _column=0;
+  setAddress(0, 0);  // Reset Cursor location
+                     // Note: this is needed because some rare displays (eg PCF21XX) don't use line 0 in the '3 Line' mode.   
 }
 
-/** Move cursor to selected row and column
-  */
+/** Locate cursor to a screen column and row
+  *
+  * @param column  The horizontal position from the left, indexed from 0
+  * @param row     The vertical position from the top, indexed from 0
+  */ 
 void TextLCD_Base::locate(int column, int row) {
     
    // setAddress() does all the heavy lifting:
@@ -433,18 +656,18 @@ int TextLCD_Base::_address(int column, int row) {
 
 // This is new method to return the memory address based on row, column and displaytype.
 //
+/** Return the memoryaddress of screen column and row location
+   *
+   * @param column  The horizontal position from the left, indexed from 0
+   * @param row     The vertical position from the top, indexed from 0
+   * @param return  The memoryaddress of screen column and row location
+   */
 int TextLCD_Base::getAddress(int column, int row) {
 
     switch (_type) {
         case LCD8x1:
+        case LCD24x1:        
             return 0x00 + column;                        
-
-        case LCD8x2B:
-            // LCD8x2B is a special layout of LCD16x1
-            if (row==0) 
-              return 0x00 + column;                        
-            else   
-              return 0x08 + column;                        
 
         case LCD16x1:
             // LCD16x1 is a special layout of LCD8x2
@@ -453,19 +676,51 @@ int TextLCD_Base::getAddress(int column, int row) {
             else   
               return 0x40 + (column - 8);                        
 
-#if(0)
+        case LCD8x2B:
+            // LCD8x2B is a special layout of LCD16x1
+            if (row==0) 
+              return 0x00 + column;                        
+            else   
+              return 0x08 + column;                        
+
+        case LCD8x2:               
+        case LCD12x2:                
+        case LCD16x2:
+        case LCD20x2:
+        case LCD24x2:        
+        case LCD40x2:                
+            return 0x00 + (row * 0x40) + column;
+
+// Not sure about this one, seems wrong.
+// Left in for compatibility with original library
+        case LCD16x2B:      
+            return 0x00 + (row * 40) + column;
+    
+
 // Special mode for ST7036 
 //        case LCD16x3:
 
-// Special mode for PCF2116 (and KS0078) 
-        case LCD12x3:
+// Special mode for PCF2116 
+        case LCD12x3B:
+            switch (row) {
+                case 0:
+                    return 0x20 + column;
+                case 1:
+                    return 0x40 + column;
+                case 2:
+                    return 0x60 + column;
+            }
+
+        case LCD12x4:
             switch (row) {
                 case 0:
                     return 0x00 + column;
                 case 1:
-                    return 0x20 + column;
-                case 2:
                     return 0x40 + column;
+                case 2:
+                    return 0x0C + column;
+                case 3:
+                    return 0x4C + column;
             }
 
 // Special mode for PCF2116 (and KS0078) 
@@ -479,20 +734,6 @@ int TextLCD_Base::getAddress(int column, int row) {
                     return 0x40 + column;
                 case 3:
                     return 0x60 + column;                   
-            }
-
-#endif
-
-        case LCD12x4:
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x40 + column;
-                case 2:
-                    return 0x0C + column;
-                case 3:
-                    return 0x4C + column;
             }
 
         case LCD16x4:
@@ -520,7 +761,7 @@ int TextLCD_Base::getAddress(int column, int row) {
             }
 
 // Special mode for KS0078
-        case LCD24x4:
+        case LCD24x4B:
             switch (row) {
                 case 0:
                     return 0x00 + column;
@@ -531,19 +772,6 @@ int TextLCD_Base::getAddress(int column, int row) {
                 case 3:
                     return 0x60 + column;
             }
-
-// Not sure about this one, seems wrong.
-// Left in for compatibility with original library
-        case LCD16x2B:      
-            return 0x00 + (row * 40) + column;
-      
-        case LCD8x2:               
-        case LCD12x2:                
-        case LCD16x2:
-        case LCD20x2:
-        case LCD24x2:        
-        case LCD40x2:                
-            return 0x00 + (row * 0x40) + column;
 
         case LCD40x4:                
           // LCD40x4 is a special case since it has 2 controllers
@@ -588,8 +816,11 @@ int TextLCD_Base::getAddress(int column, int row) {
 }
 
 
-// Set row, column and update memoryaddress.
-//
+/** Set the memoryaddress of screen column and row location
+  *
+  * @param column  The horizontal position from the left, indexed from 0
+  * @param row     The vertical position from the top, indexed from 0
+  */
 void TextLCD_Base::setAddress(int column, int row) {
    
 // Sanity Check column
@@ -617,6 +848,11 @@ void TextLCD_Base::setAddress(int column, int row) {
     _writeCommand(0x80 | addr);
 }
 
+
+/** Return the number of columns
+  *
+  * @param return  The number of columns
+  */   
 int TextLCD_Base::columns() {
     switch (_type) {
         case LCD8x1:
@@ -625,9 +861,9 @@ int TextLCD_Base::columns() {
             return 8;
         
         case LCD12x2:        
-//        case LCD12x3:                
+        case LCD12x3B:                
         case LCD12x4:        
-//        case LCD12x4B:                
+        case LCD12x4B:                
             return 12;        
 
         case LCD16x1:        
@@ -641,8 +877,9 @@ int TextLCD_Base::columns() {
         case LCD20x4:
             return 20;
 
+        case LCD24x1:
         case LCD24x2:
-        case LCD24x4:        
+        case LCD24x4B:        
             return 24;        
 
         case LCD40x2:
@@ -655,10 +892,15 @@ int TextLCD_Base::columns() {
     }
 }
 
+/** Return the number of rows
+  *
+  * @param return  The number of rows
+  */
 int TextLCD_Base::rows() {
     switch (_type) {
         case LCD8x1: 
         case LCD16x1:         
+        case LCD24x1:                 
             return 1;           
 
         case LCD8x2:  
@@ -671,15 +913,15 @@ int TextLCD_Base::rows() {
         case LCD40x2:                
             return 2;
 
-//        case LCD12x3:                
+        case LCD12x3B:                
 //        case LCD16x3:                
-//            return 3;
+            return 3;
                     
         case LCD12x4:        
-//        case LCD12x4B:                
+        case LCD12x4B:                
         case LCD16x4:
         case LCD20x4:
-        case LCD24x4:        
+        case LCD24x4B:        
         case LCD40x4:
             return 4;
 
@@ -689,8 +931,10 @@ int TextLCD_Base::rows() {
     }
 }
 
-
-// Set the Cursor Mode (Cursor Off & Blink Off, Cursor On & Blink Off, Cursor Off & Blink On, Cursor On & Blink On
+/** Set the Cursormode
+  *
+  * @param cursorMode  The Cursor mode (CurOff_BlkOff, CurOn_BlkOff, CurOff_BlkOn, CurOn_BlkOn)
+  */
 void TextLCD_Base::setCursor(LCDCursor cursorMode) { 
 
   // Save new cursor mode, needed when 2 controllers are in use or when display is switched off/on
@@ -701,7 +945,10 @@ void TextLCD_Base::setCursor(LCDCursor cursorMode) {
     
 }
 
-// Set the Displaymode (On/Off)
+/** Set the Displaymode
+  *
+  * @param displayMode The Display mode (DispOff, DispOn)
+  */
 void TextLCD_Base::setMode(LCDMode displayMode) { 
 
   // Save new displayMode, needed when 2 controllers are in use or when cursor is changed
@@ -745,14 +992,19 @@ void TextLCD_Base::setMode(LCDMode displayMode) {
 }
 
 
-// Set the Displaymode (On/Off) and Cursortype for current controller
+/** Low level method to restore the cursortype and display mode for current controller
+  */     
 void TextLCD_Base::_setCursorAndDisplayMode(LCDMode displayMode, LCDCursor cursorType) { 
     
     // Configure current LCD controller       
     _writeCommand(0x08 | displayMode | cursorType);
 }
 
-// Set the Backlight mode (Off/On)
+
+/** Set the Backlight mode
+  *
+  *  @param backlightMode The Backlight mode (LightOff, LightOn)
+  */
 void TextLCD_Base::setBacklight(LCDBacklight backlightMode) {
 
     if (backlightMode == LightOn) {
@@ -763,7 +1015,11 @@ void TextLCD_Base::setBacklight(LCDBacklight backlightMode) {
     }
 } 
 
-
+/** Set User Defined Characters
+  *
+  * @param unsigned char c   The Index of the UDC (0..7)
+  * @param char *udc_data    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
+  */
 void TextLCD_Base::setUDC(unsigned char c, char *udc_data) {
   
   // Select and configure second LCD controller when needed
@@ -792,6 +1048,8 @@ void TextLCD_Base::setUDC(unsigned char c, char *udc_data) {
     
 }
 
+/** Low level method to store user defined characters for current controller
+  */     
 void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
   
   // Select CG RAM for current LCD controller
@@ -853,6 +1111,18 @@ TextLCD::TextLCD(PinName rs, PinName e,
   _init();
 
 }
+
+
+/** Destruct a TextLCD interface for using regular mbed pins
+  *
+  * @param  none
+  * @return none
+  */ 
+TextLCD::~TextLCD() {
+   if (_bl != NULL) {delete _bl;}  // BL pin
+   if (_e2 != NULL) {delete _e2;}  // E2 pin
+}
+
 
 /** Set E pin (or E2 pin)
   * Used for mbed pins, I2C bus expander or SPI shiftregister
@@ -916,16 +1186,6 @@ void TextLCD::_setBL(bool value) {
 void TextLCD::_setData(int value) {
   _d = value & 0x0F;   // Write Databits 
 }    
-
-/** Destruct a TextLCD interface for using regular mbed pins
-  *
-  * @param  none
-  * @return none
-  */ 
-TextLCD::~TextLCD() {
-   if (_bl != NULL) {delete _bl;}  // BL pin
-   if (_e2 != NULL) {delete _e2;}  // E2 pin
-}
 
     
 //----------- End TextLCD ---------------
@@ -1150,10 +1410,10 @@ TextLCD_I2C_N::TextLCD_I2C_N(I2C *i2c, char deviceAddress, LCDType type, PinName
                               
   _slaveAddress = deviceAddress & 0xFE;
   
-
   // Setup the I2C bus
-  // The max bitrate for ST7032 is 400kbit, 
-//  _i2c->frequency(100000);
+  // The max bitrate for ST7032i is 400kbit, lets stick to default here
+  _i2c->frequency(100000);
+//  _i2c->frequency(50000);
 
         
   // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
@@ -1196,6 +1456,12 @@ void TextLCD_I2C_N::_setBL(bool value) {
     }    
 }    
 
+    
+// Not used in this mode
+void TextLCD_I2C_N::_setData(int value) {
+}    
+
+
 // Write a byte using I2C
 void TextLCD_I2C_N::_writeByte(int value) {
 
@@ -1204,10 +1470,6 @@ void TextLCD_I2C_N::_writeByte(int value) {
   _i2c->write(_slaveAddress, data, 2);
  
 }
-    
-// Not used in this mode
-void TextLCD_I2C_N::_setData(int value) {
-}    
 
 
 //-------- End TextLCD_I2C_N ------------
@@ -1311,7 +1573,6 @@ void TextLCD_SPI::_setBL(bool value) {
   _setCS(true);  
      
 }    
-
 
 
 // Place the 4bit data on the databus
@@ -1429,6 +1690,11 @@ void TextLCD_SPI_N::_setBL(bool value) {
     }    
 }    
 
+// Not used in this mode
+void TextLCD_SPI_N::_setData(int value) {
+}    
+
+
 // Write a byte using SPI
 void TextLCD_SPI_N::_writeByte(int value) {
     _cs = 0;
@@ -1438,9 +1704,6 @@ void TextLCD_SPI_N::_writeByte(int value) {
     _cs = 1;
 }
     
-// Not used in this mode
-void TextLCD_SPI_N::_setData(int value) {
-}    
 
 
 //-------- End TextLCD_SPI_N ------------

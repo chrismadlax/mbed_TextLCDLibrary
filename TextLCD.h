@@ -10,6 +10,7 @@
  *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined DigitalOut pins
  *               2014, v09: WH/EO, Added Class for Native SPI controllers such as ST7032 
  *               2014, v10: WH, Added Class for Native I2C controllers such as ST7032i, Added support for MCP23008 I2C portexpander, Added support for Adafruit module  
+ *               2014, v11: WH, Added support for native I2C controllers such as PCF21XX, improved the _initCtrl() method to deal with differences between all supported controllers  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -69,14 +70,15 @@
 //LCD and serial portexpanders should be wired accordingly 
 //
 //Select Hardware module (one option only)
-#define DEFAULT        1
-#define ADAFRUIT       0
+#define DEFAULT        0
+#define ADAFRUIT       1
 #define DFROBOT        0
 
 
 #if (DEFAULT==1)
-//Definitions for hardware used by WH 
+//Definitions for default (WH) mapping between serial port expander pins and LCD controller
 //This hardware supports the I2C bus expander (PCF8574/PCF8574A or MCP23008) and SPI bus expander (74595) interfaces
+//See https://mbed.org/cookbook/Text-LCD-Enhanced
 //
 //Note: LCD RW pin must be connected to GND
 //      E2 is used for LCD40x4 (second controller)
@@ -98,8 +100,9 @@
 #endif
 
 #if (ADAFRUIT==1)
-//Definitions for i2cspilcdbackpack from Adafruit, See http://www.ladyada.net/products/i2cspilcdbackpack
+//Definitions for Adafruit i2cspilcdbackpack mapping between serial port expander pins and LCD controller
 //This hardware supports both an I2C expander (MCP23008) and an SPI expander (74595) selectable by a jumper.
+//See http://www.ladyada.net/products/i2cspilcdbackpack
 //
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on this hardware and so it does not support LCD40x4 (second controller)
@@ -121,8 +124,9 @@
 #endif
 
 #if (DFROBOT==1)
-//Definitions for LCD2004 Module from DFROBOT, See http://arduino-info.wikispaces.com/LCD-Blue-I2C
+//Definitions for DFROBOT LCD2004 Module mapping between serial port expander pins and LCD controller
 //This hardware uses PCF8574 and is different from earlier/different Arduino I2C LCD displays
+//See http://arduino-info.wikispaces.com/LCD-Blue-I2C
 //
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default Arduino hardware and so it does not support LCD40x4 (second controller)
@@ -205,6 +209,9 @@
 /* ST7032I I2C slave address */
 #define ST7032_SA     0x7C
 
+/* PCF21XX I2C slave address */
+#define PCF21XX_SA0   0x74
+#define PCF21XX_SA1   0x76
 
 /** Some sample User Defined Chars 5x7 dots */
 const char udc_ae[] = {0x00, 0x00, 0x1B, 0x05, 0x1F, 0x14, 0x1F, 0x00};  //æ
@@ -252,10 +259,10 @@ const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // 
 //const char udc_ch_2[]  =  {0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f};  // Hor bars 4 (inverted)
 //const char udc_ch_3[]  =  {0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15};  // Ver bars 3
 //const char udc_ch_4[]  =  {0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a};  // Ver bars 3 (inverted)
-//const char udc_ch_yr[] =  {0x08, 0x0f, 0x12, 0x0f, 0x0a, 0x1f, 0x02, 0x02};  // Year   (kanji)
-//const char udc_ch_mo[] =  {0x0f, 0x09, 0x0f, 0x09, 0x0f, 0x09, 0x09, 0x13};  // Month  (kanji)
-//const char udc_ch_dy[] =  {0x1f, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11, 0x1F};  // Day    (kanji)
-//const char udc_ch_mi[] =  {0x0C, 0x0a, 0x11, 0x1f, 0x09, 0x09, 0x09, 0x13};  // minute (kanji)
+//const char udc_ch_yr[] =  {0x08, 0x0f, 0x12, 0x0f, 0x0a, 0x1f, 0x02, 0x02};  // Year   (kana)
+//const char udc_ch_mo[] =  {0x0f, 0x09, 0x0f, 0x09, 0x0f, 0x09, 0x09, 0x13};  // Month  (kana)
+//const char udc_ch_dy[] =  {0x1f, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11, 0x1F};  // Day    (kana)
+//const char udc_ch_mi[] =  {0x0C, 0x0a, 0x11, 0x1f, 0x09, 0x09, 0x09, 0x13};  // minute (kana)
 
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
@@ -272,32 +279,37 @@ public:
         LCD8x1,     /**<  8x1 LCD panel */    
         LCD8x2,     /**<  8x2 LCD panel */          
         LCD8x2B,    /**<  8x2 LCD panel (actually 16x1) */                  
+//        LCD12x1,    /**< 12x1 LCD panel */                          
+//        LCD12x1B,   /**< 12x1 LCD panel, special mode PCF21XX */                                  
         LCD12x2,    /**< 12x2 LCD panel */                          
-//        LCD12x3,    /**< 12x3 LCD panel, special mode PCF21XX */                                  
+        LCD12x3B,   /**< 12x3 LCD panel, special mode PCF21XX */                                  
         LCD12x4,    /**< 12x4 LCD panel */                  
-//        LCD12x4B,   /**< 12x4 LCD panel, special mode PCF21XX */                                          
+        LCD12x4B,   /**< 12x4 LCD panel, special mode PCF21XX */                                          
         LCD16x1,    /**< 16x1 LCD panel (actually 8x2) */          
         LCD16x2,    /**< 16x2 LCD panel (default) */
         LCD16x2B,   /**< 16x2 LCD panel alternate addressing */
-//        LCD16x3,    /**< 16x3 LCD panel, special mode ST7036 */                
+//        LCD16x3B,   /**< 16x3 LCD panel, special mode ST7036 */                
         LCD16x4,    /**< 16x4 LCD panel */        
+//        LCD20x1,    /**< 20x1 LCD panel */
         LCD20x2,    /**< 20x2 LCD panel */
         LCD20x4,    /**< 20x4 LCD panel */
+        LCD24x4B,   /**< 24x4 LCD panel, special mode KS0078 */                                                  
+        LCD24x1,    /**< 24x1 LCD panel */        
         LCD24x2,    /**< 24x2 LCD panel */        
-        LCD24x4,    /**< 24x4 LCD panel, special mode KS0078 */                
         LCD40x2,    /**< 40x2 LCD panel */                
         LCD40x4     /**< 40x4 LCD panel, Two controller version */                        
     };
 
     /** LCD Controller Device */
     enum LCDCtrl {
-        HD44780,    /**<  HD44780 (default)        */    
-        WS0010,     /**<  WS0010  OLED Controller  */    
-        ST7036,     /**<  ST7036  3V3 with Booster */   
-        ST7032_3V3, /**<  ST7032  3V3 with Booster */   
-        ST7032_5V   /**<  ST7032  5V no Booster    */           
-//        PCF210X,    /**<  PCF210X 5V no Booster    */                   
-//        PCF211X     /**<  PCF211X 3V3 with Booster */                           
+        HD44780,     /**<  HD44780 (default)                           */    
+        WS0010,      /**<  WS0010  OLED Controller, 4/8 bit            */    
+        ST7036,      /**<  ST7036  3V3 with Booster, 4/8 bit, SPI      */   
+        ST7032_3V3,  /**<  ST7032  3V3 with Booster, 4/8 bit, SPI, I2C */   
+        ST7032_5V,   /**<  ST7032  5V no Booster, 4/8 bit, SPI, I2C    */           
+        KS0078,      /**<  KS0078  24x3 support                        */                   
+        PCF21XX_3V3, /**<  PCF21XX 3V3 with Booster, 4/8 bit, I2C      */                           
+//        PCF21XX_5V   /**<  PCF21XX 5V no Booster, 4/8 bit, I2C         */        
     };
 
 
@@ -338,7 +350,7 @@ public:
     int printf(const char* format, ...);
 #endif
 
-    /** Locate to a screen column and row
+    /** Locate cursor to a screen column and row
      *
      * @param column  The horizontal position from the left, indexed from 0
      * @param row     The vertical position from the top, indexed from 0
@@ -406,7 +418,9 @@ public:
      */
     void setUDC(unsigned char c, char *udc_data);
 
-
+//test
+    void _initCtrl();    
+    
 protected:
 
    /** LCD controller select, mainly used for LCD40x4
@@ -429,29 +443,70 @@ protected:
     virtual int _putc(int value);
     virtual int _getc();
 
-/** Low level methods for LCD controller
+/** Low level method for LCD controller
   */
     void _init();    
-    void _initCtrl();    
+
+/** Low level initialisation method for LCD controller
+  */
+//    void _initCtrl();    
+
+/** Low level character address set method
+  */  
     int  _address(int column, int row);
+    
+/** Low level cursor enable or disable method
+  */  
     void _setCursor(LCDCursor show);
+
+/** Low level method to store user defined characters for current controller
+  */     
     void _setUDC(unsigned char c, char *udc_data);   
+
+/** Low level method to restore the cursortype and display mode for current controller
+  */     
     void _setCursorAndDisplayMode(LCDMode displayMode, LCDCursor cursorType);       
     
-/** Low level write operations to LCD controller
+
+/** Low level nibble write operation to LCD controller (serial or parallel)
   */
     void _writeNibble(int value);
-    virtual void _writeByte(int value);
+   
+/** Low level command byte write operation to LCD controller.
+  * Methods resets the RS bit and provides the required timing for the command.
+  */
     void _writeCommand(int command);
+
+/** Low level data byte write operation to LCD controller (serial or parallel).
+  * Methods sets the RS bit and provides the required timing for the data.
+  */   
     void _writeData(int data);
 
+
 /** Pure Virtual Low level writes to LCD Bus (serial or parallel)
+  * Set the Enable pin.
   */
     virtual void _setEnable(bool value) = 0;
+
+/** Pure Virtual Low level writes to LCD Bus (serial or parallel)
+  * Set the RS pin ( 0 = Command, 1 = Data).
+  */   
     virtual void _setRS(bool value) = 0;  
+
+/** Pure Virtual Low level writes to LCD Bus (serial or parallel)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
     virtual void _setBL(bool value) = 0;
+    
+/** Pure Virtual Low level writes to LCD Bus (serial or parallel)
+  * Set the databus value (4 bit).
+  */   
     virtual void _setData(int value) = 0;
 
+/** Low level byte write operation to LCD controller (serial or parallel)
+  * Depending on the RS pin this byte will be interpreted as data or command
+  */
+    virtual void _writeByte(int value);
     
 //Display type
     LCDType _type;
@@ -503,11 +558,27 @@ public:
     virtual ~TextLCD();
 
 private:    
-//Low level writes to LCD Bus (serial or parallel)
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (parallel)
+  * Set the Enable pin.
+  */
     virtual void _setEnable(bool value);
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (parallel)
+  * Set the RS pin ( 0 = Command, 1 = Data).
+  */   
     virtual void _setRS(bool value);  
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (parallel)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
     virtual void _setBL(bool value);
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (parallel)
+  * Set the databus value (4 bit).
+  */   
     virtual void _setData(int value);
+
 
 /** Regular mbed pins bus
   */
@@ -542,13 +613,34 @@ public:
     TextLCD_I2C(I2C *i2c, char deviceAddress = PCF8574_SA0, LCDType type = LCD16x2, LCDCtrl ctrl = HD44780);
 
 private:
-//Low level writes to LCD Bus (serial or parallel)
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the Enable pin.
+  */
     virtual void _setEnable(bool value);
-    virtual void _setRS(bool value);  
-    virtual void _setBL(bool value);
-    virtual void _setData(int value); 
 
-// Write data to MCP23008 I2C portexpander
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the RS pin ( 0 = Command, 1 = Data).
+  */   
+    virtual void _setRS(bool value);  
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
+    virtual void _setBL(bool value);
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the databus value (4 bit).
+  */   
+    virtual void _setData(int value);
+    
+    
+/** Write data to MCP23008 I2C portexpander
+  *  @param reg register to write
+  *  @param value data to write
+  *  @return none     
+  *
+  */
     void _write_register (int reg, int value);     
   
 //I2C bus
@@ -584,15 +676,35 @@ public:
 
 
 private:
-//Low level writes to LCD Bus (serial or parallel)
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the Enable pin.
+  */
     virtual void _setEnable(bool value);
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the RS pin ( 0 = Command, 1 = Data).
+  */   
     virtual void _setRS(bool value);  
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
     virtual void _setBL(bool value);
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial expander)
+  * Set the databus value (4 bit).
+  */   
     virtual void _setData(int value);
+    
+/** Implementation of Low level writes to LCD Bus (serial expander)
+  * Set the CS pin (0 = select, 1 = deselect).
+  */   
     virtual void _setCS(bool value);
     
-//Low level writes to LCD serial bus only
-    void _writeBus();      
+///** Low level writes to LCD serial bus only (serial expander)
+//  */
+//    void _writeBus();      
    
 // SPI bus        
     SPI *_spi;
@@ -627,11 +739,31 @@ public:
     virtual ~TextLCD_SPI_N(void);
 
 private:
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the Enable pin.
+  */
     virtual void _setEnable(bool value);
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the RS pin ( 0 = Command, 1 = Data).
+  */   
     virtual void _setRS(bool value);  
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
     virtual void _setBL(bool value);
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the databus value (4 bit).
+  */   
     virtual void _setData(int value);
+
+/** Low level writes to LCD serial bus only (serial native)
+  */
     virtual void _writeByte(int value);
+
    
 // SPI bus        
     SPI *_spi;
@@ -663,11 +795,31 @@ public:
     virtual ~TextLCD_I2C_N(void);
 
 private:
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the Enable pin.
+  */
     virtual void _setEnable(bool value);
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the RS pin ( 0 = Command, 1 = Data).
+  */   
     virtual void _setRS(bool value);  
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
     virtual void _setBL(bool value);
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the databus value (4 bit).
+  */   
     virtual void _setData(int value);
+
+/** Low level writes to LCD serial bus only (serial native)
+  */
     virtual void _writeByte(int value);
+
 
 //I2C bus
     I2C *_i2c;
