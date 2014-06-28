@@ -10,7 +10,7 @@
  *               2014, v08: WH, Refactored in Base and Derived Classes to deal with mbed lib change regarding 'NC' defined pins 
  *               2014, v09: WH/EO, Added Class for Native SPI controllers such as ST7032 
  *               2014, v10: WH, Added Class for Native I2C controllers such as ST7032i, Added support for MCP23008 I2C portexpander, Added support for Adafruit module  
- *               2014, v11: WH, Added support for native I2C controllers such as PCF21XX, improved the _initCtrl() method to deal with differences between all supported controllers  
+ *               2014, v11: WH, Added support for native I2C controllers such as PCF21XX, Improved the _initCtrl() method to deal with differences between all supported controllers  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,17 +34,81 @@
 #include "TextLCD.h"
 #include "mbed.h"
 
+//For Testing only
+//DigitalOut led1(LED1);
+//DigitalOut led2(LED2);
+//  led2=!led2;    
 
-DigitalOut led1(LED1);
-DigitalOut led2(LED2);
 
+/** Some sample User Defined Chars 5x7 dots */
+const char udc_ae[] = {0x00, 0x00, 0x1B, 0x05, 0x1F, 0x14, 0x1F, 0x00};  //æ
+const char udc_0e[] = {0x00, 0x00, 0x0E, 0x13, 0x15, 0x19, 0x0E, 0x00};  //ø
+const char udc_ao[] = {0x0E, 0x0A, 0x0E, 0x01, 0x0F, 0x11, 0x0F, 0x00};  //å
+const char udc_AE[] = {0x0F, 0x14, 0x14, 0x1F, 0x14, 0x14, 0x17, 0x00};  //Æ
+const char udc_0E[] = {0x0E, 0x13, 0x15, 0x15, 0x15, 0x19, 0x0E, 0x00};  //Ø
+const char udc_Ao[] = {0x0E, 0x0A, 0x0E, 0x11, 0x1F, 0x11, 0x11, 0x00};  //Å
+const char udc_PO[] = {0x04, 0x0A, 0x0A, 0x1F, 0x1B, 0x1B, 0x1F, 0x00};  //Padlock Open
+const char udc_PC[] = {0x1C, 0x10, 0x08, 0x1F, 0x1B, 0x1B, 0x1F, 0x00};  //Padlock Closed
 
+const char udc_0[]  = {0x18, 0x14, 0x12, 0x11, 0x12, 0x14, 0x18, 0x00};  // |>
+const char udc_1[]  = {0x03, 0x05, 0x09, 0x11, 0x09, 0x05, 0x03, 0x00};  // <|
+const char udc_2[]  = {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00};  // |
+const char udc_3[]  = {0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x00};  // ||
+const char udc_4[]  = {0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x00};  // |||
+const char udc_5[]  = {0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x00};  // =
+const char udc_6[]  = {0x15, 0x0a, 0x15, 0x0a, 0x15, 0x0a, 0x15, 0x00};  // checkerboard
+const char udc_7[]  = {0x10, 0x08, 0x04, 0x02, 0x01, 0x00, 0x10, 0x00};  // \
+
+const char udc_degr[]   = {0x06, 0x09, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00};  // Degree symbol
+
+const char udc_TM_T[]   = {0x1F, 0x04, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00};  // Trademark T
+const char udc_TM_M[]   = {0x11, 0x1B, 0x15, 0x11, 0x00, 0x00, 0x00, 0x00};  // Trademark M
+
+//const char udc_Bat_Hi[] = {0x0E, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Full
+//const char udc_Bat_Ha[] = {0x0E, 0x11, 0x13, 0x17, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Half
+//const char udc_Bat_Lo[] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F, 0x00};  // Battery Low
+const char udc_Bat_Hi[] = {0x0E, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Full
+const char udc_Bat_Ha[] = {0x0E, 0x11, 0x11, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Half
+const char udc_Bat_Lo[] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x1F, 0x1F, 0x00};  // Battery Low
+const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // AC Power
+
+//const char udc_smiley[] = {0x00, 0x0A, 0x00, 0x04, 0x11, 0x0E, 0x00, 0x00};  // Smiley
+//const char udc_droopy[] = {0x00, 0x0A, 0x00, 0x04, 0x00, 0x0E, 0x11, 0x00};  // Droopey
+//const char udc_note[]   = {0x01, 0x03, 0x05, 0x09, 0x0B, 0x1B, 0x18, 0x00};  // Note
+
+//const char udc_bar_1[]  = {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00};  // Bar 1
+//const char udc_bar_2[]  = {0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00};  // Bar 11
+//const char udc_bar_3[]  = {0x1C, 0x1C, 0x1C, 0x1C, 0x1C, 0x1C, 0x1C, 0x00};  // Bar 111
+//const char udc_bar_4[]  = {0x17, 0x17, 0x17, 0x17, 0x17, 0x17, 0x17, 0x00};  // Bar 1111
+//const char udc_bar_5[]  = {0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Bar 11111
+
+//const char udc_ch_1[]  =  {0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00};  // Hor bars 4
+//const char udc_ch_2[]  =  {0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x1f};  // Hor bars 4 (inverted)
+//const char udc_ch_3[]  =  {0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15};  // Ver bars 3
+//const char udc_ch_4[]  =  {0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a};  // Ver bars 3 (inverted)
+//const char udc_ch_yr[] =  {0x08, 0x0f, 0x12, 0x0f, 0x0a, 0x1f, 0x02, 0x02};  // Year   (kana)
+//const char udc_ch_mo[] =  {0x0f, 0x09, 0x0f, 0x09, 0x0f, 0x09, 0x09, 0x13};  // Month  (kana)
+//const char udc_ch_dy[] =  {0x1f, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11, 0x1F};  // Day    (kana)
+//const char udc_ch_mi[] =  {0x0C, 0x0a, 0x11, 0x1f, 0x09, 0x09, 0x09, 0x13};  // minute (kana)
+
+    
 /** Create a TextLCD_Base interface
   *
   * @param type  Sets the panel size/addressing mode (default = LCD16x2)
   * @param ctrl  LCD controller (default = HD44780)           
   */
 TextLCD_Base::TextLCD_Base(LCDType type, LCDCtrl ctrl) : _type(type), _ctrl(ctrl) {
+    
+  // Extract LCDType data  
+
+  // Columns encoded in b7..b0
+  _nr_cols = (_type & 0xFF);          
+
+  // Rows encoded in b15..b8  
+  _nr_rows = ((_type >> 8) & 0xFF);  
+
+  // Addressing mode encoded in b19..b16  
+  _addr_mode = _type & LCD_T_ADR_MSK;
 }
 
 
@@ -55,25 +119,24 @@ void TextLCD_Base::_init() {
   
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
-    _ctrl_idx=_LCDCtrl_1;        // Select 2nd controller
-    
-    _initCtrl();                 // Init 2nd controller
-    
+    _ctrl_idx=_LCDCtrl_1;        // Select 2nd controller   
+    _initCtrl();                 // Init 2nd controller   
   }
     
   // Select and configure primary LCD controller
   _ctrl_idx=_LCDCtrl_0;          // Select primary controller  
-
   _initCtrl();                   // Init primary controller
 
   // Reset Cursor location
   _row=0;
-  _column=0; 
+  _column=0;
+  
 } 
 
 /**  Init the LCD controller
   *  4-bit mode, number of lines, fonttype, no cursor etc
-  *  
+  *
+  *  Note: some configurations are commented out because they have not yet been tested due to lack of hardware
   */
 void TextLCD_Base::_initCtrl() {
 
@@ -102,52 +165,65 @@ void TextLCD_Base::_initCtrl() {
             case LCD8x2B:        //8x2B is a special case of 16x1
 //            case LCD12x1:                                
             case LCD16x1:                                            
+//            case LCD20x1:
             case LCD24x1:
-//@TODO check config
-              _writeCommand(0x20); // Function set 001 DL N F - -
-                                   //  DL=0 (4 bits bus)             
-                                   //   N=0 (1 line)
-                                   //   F=0 (5x7 dots font)
+              _writeCommand(0x20); // Function set 001 DL N RE(0) DH REV
+                                   //   DL=0  (4 bits bus)             
+                                   //    N=0  (1 line)                                   
+                                   //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                   //   DH=0  (Disp shift=disable, special mode for KS0078)                                
+                                   //   REV=0 (Reverse=Normal, special mode for KS0078)
+
+
+
               break;                                
 
-            case LCD24x4B:
-              // Special mode for KS0078
-              _writeCommand(0x2A); // Function set 001 DL N RE DH REV
-                                   //   DL=0  (4 bits bus)             
-                                   //    N=1  (Dont care for KS0078)
-                                   //   RE=0  (Dis. Extended Regs, special mode for KS0078)
-                                   //   DH=1  (Disp shift, special mode for KS0078)                                
-                                   //   REV=0 (Reverse, special mode for KS0078)
+//            case LCD12x3D:         // Special mode for KS0078            
+//            case LCD12x3D1:        // Special mode for KS0078            
+//            case LCD12x4D:         // Special mode for KS0078            
+//            case LCD16x3D:             
+//            case LCD16x4D:            
+//            case LCD24x3D:         // Special mode for KS0078
+//            case LCD24x3D1:        // Special mode for KS0078
+            case LCD24x4D:         // Special mode for KS0078
 
-              _writeCommand(0x2E); // Function set 001 DL N RE DH REV
+              _writeCommand(0x2A); // Function set 001 DL N RE(0) DH REV
                                    //   DL=0  (4 bits bus)             
-                                   //    N=1  (Dont care for KS0078)
+                                   //    N=1  (Dont care for KS0078 in 4-line mode)
+                                   //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                   //   DH=1  (Disp shift=enable, special mode for KS0078)                                
+                                   //   REV=0 (Reverse=Normal, special mode for KS0078)
+
+              _writeCommand(0x2E); // Function set 001 DL N RE(1) BE 0
+                                   //   DL=0  (4 bits bus)             
+                                   //    N=1  (Dont care for KS0078 in 4-line mode)
                                    //   RE=1  (Ena Extended Regs, special mode for KS0078)
-                                   //   DH=1  (Disp shift, special mode for KS0078)                                
-                                   //   REV=0 (Reverse, special mode for KS0078)
+                                   //   BE=1  (Blink Enable, CG/SEG RAM, special mode for KS0078)                                
+                                   //    X=0 (Reverse, special mode for KS0078)
 
               _writeCommand(0x09); // Ext Function set 0000 1 FW BW NW
                                    //   FW=0  (5-dot font, special mode for KS0078)
                                    //   BW=0  (Cur BW invert disable, special mode for KS0078)
                                    //   NW=1  (4 Line, special mode for KS0078)                                
 
-              _writeCommand(0x2A); // Function set 001 DL N RE DH REV
+              _writeCommand(0x2A); // Function set 001 DL N RE(0) DH REV
                                    //   DL=0  (4 bits bus)             
-                                   //    N=1  (Dont care for KS0078)
+                                   //    N=1  (Dont care for KS0078 in 4 line mode)
                                    //   RE=0  (Dis. Extended Regs, special mode for KS0078)
-                                   //   DH=1  (Disp shift, special mode for KS0078)                                
-                                   //   REV=0 (Reverse, special mode for KS0078)
-                                                  
-            // All other LCD types are initialised as 2 Line displays (including LCD40x4)
+                                   //   DH=1  (Disp shift enable, special mode for KS0078)                                
+                                   //   REV=0 (Reverse normal, special mode for KS0078)
+              break;                                
+              
             default:
-//@TODO check config            
-              _writeCommand(0x28); // Function set 001 DL N F - -
-                                   //  DL=0 (4 bits bus)
-                                   //  Note: 4 bit mode is ignored for native SPI and I2C devices                                 
-                                   //   N=1 (2 lines)
-                                   //   F=0 (5x7 dots font, only option for 2 line display)
-                                   //    -  (Don't care)                                
-            
+              // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)            
+              _writeCommand(0x28); // Function set 001 DL N RE(0) DH REV
+                                   //   DL=0  (4 bits bus)             
+                                   //   Note: 4 bit mode is ignored for native SPI and I2C devices                                                                    
+                                   //    N=1  (2 lines)                                   
+                                   //   RE=0  (Dis. Extended Regs, special mode for KS0078)
+                                   //   DH=0  (Disp shift=disable, special mode for KS0078)                                
+                                   //   REV=0 (Reverse=Normal, special mode for KS0078)
+
               break;
           } // switch type
 
@@ -162,9 +238,8 @@ void TextLCD_Base::_initCtrl() {
             case LCD8x2B:        //8x2B is a special case of 16x1
 //            case LCD12x1:                                
             case LCD16x1:                                            
+//            case LCD20x1:                    
             case LCD24x1:                    
-
-//              _writeCommand(0x31);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Select Instruction Set = 1
               _writeCommand(0x21);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Select Instruction Set = 1
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices
 
@@ -178,16 +253,19 @@ void TextLCD_Base::_initCtrl() {
               _writeCommand(0x6C);    //Follower control
               wait_ms(10);            // Wait 10ms to ensure powered up
           
-//              _writeCommand(0x30);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Return to Instruction Set = 0        
               _writeCommand(0x20);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Return to Instruction Set = 0                  
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
+              break;  
 
+            case LCD12x3D:            // Special mode for PCF2116
+            case LCD12x3D1:           // Special mode for PCF2116
+            case LCD12x4D:            // Special mode for PCF2116
+            case LCD24x4D:            // Special mode for KS0078
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
               break;  
 
             default:
               // All other LCD types are initialised as 2 Line displays        
-                                    
-//              _writeCommand(0x39);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Select Instruction Set = 1
               _writeCommand(0x29);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices
 
@@ -201,13 +279,11 @@ void TextLCD_Base::_initCtrl() {
               _writeCommand(0x6C);    //Follower control
               wait_ms(10);            // Wait 10ms to ensure powered up
           
-//              _writeCommand(0x38);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Return to Instruction Set = 0        
               _writeCommand(0x28);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                  
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
           } // switch type    
                                      
           break; // case ST7032_3V3 Controller
-
 
       case ST7032_5V:
           // ST7032 controller: Disable Voltage booster for VLCD. VDD=5V      
@@ -218,9 +294,8 @@ void TextLCD_Base::_initCtrl() {
             case LCD8x2B:        //8x2B is a special case of 16x1
 //            case LCD12x1:                                
             case LCD16x1:                                            
+//            case LCD20x1:                    
             case LCD24x1:                    
-
-//              _writeCommand(0x31);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Select Instruction Set = 1
               _writeCommand(0x21);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Select Instruction Set = 1
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices
 
@@ -234,16 +309,19 @@ void TextLCD_Base::_initCtrl() {
               _writeCommand(0x6C);    //Follower control
               wait_ms(10);            // Wait 10ms to ensure powered up
           
-//              _writeCommand(0x30);    //FUNCTION SET 8 bit,N=0 1-line display mode,5*7dot, Return to Instruction Set = 0        
               _writeCommand(0x20);    //FUNCTION SET 4 bit, N=0 1-line display mode, 5*7dot, Return to Instruction Set = 0                  
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
+              break;  
 
+            case LCD12x3D:            // Special mode for PCF2116
+            case LCD12x3D1:           // Special mode for PCF2116
+            case LCD12x4D:            // Special mode for PCF2116
+            case LCD24x4D:            // Special mode for KS0078
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
               break;  
 
             default:
               // All other LCD types are initialised as 2 Line displays        
-                                    
-//              _writeCommand(0x39);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Select Instruction Set = 1
               _writeCommand(0x29);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Select Instruction Set = 1
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices
 
@@ -257,7 +335,6 @@ void TextLCD_Base::_initCtrl() {
               _writeCommand(0x6C);    //Follower control
               wait_ms(10);            // Wait 10ms to ensure powered up
           
-//              _writeCommand(0x38);    //FUNCTION SET 8 bit,N=1 2-line display mode,5*7dot, Return to Instruction Set = 0        
               _writeCommand(0x28);    //FUNCTION SET 4 bit, N=1 2-line display mode, 5*7dot, Return to Instruction Set = 0                  
                                       //Note: 4 bit mode is ignored for native SPI and I2C devices                                                                          
           } // switch type    
@@ -271,7 +348,7 @@ void TextLCD_Base::_initCtrl() {
           // Initialise Display configuration
           switch (_type) {
             case LCD8x1:         //8x1 is a regular 1 line display
-            case LCD8x2B:        //8x2B is a special case of 16x1
+            case LCD8x2B:        //8x2D is a special case of 16x1
 //            case LCD12x1:                                
             case LCD16x1:   
             case LCD24x1:                                                                         
@@ -307,8 +384,16 @@ void TextLCD_Base::_initCtrl() {
               wait_ms(50);      
               break;  
 #endif
+
+            case LCD12x3D:            // Special mode for PCF2116
+            case LCD12x3D1:           // Special mode for PCF2116
+            case LCD12x4D:            // Special mode for PCF2116
+            case LCD24x4D:            // Special mode for KS0078
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+
             default:
-              // All other LCD types are initialised as 2 Line displays        
+              // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)       
               _writeCommand(0x29);    // 4-bit Databus, N=1 2 Line, DH=0 5x7font, IS2,IS1 = 01 Select Instruction Set = 1              
               wait_ms(30);            // > 26,3ms 
               _writeCommand(0x14);    // Bias: 1/5, 2-Lines LCD 
@@ -326,61 +411,118 @@ void TextLCD_Base::_initCtrl() {
           
           break; // case ST7036 Controller
           
-      case PCF21XX_3V3:
-          // PCF21XX controller: Initialise Voltage booster for VLCD. VDD=3V3
-
+      case PCF2113_3V3:
+          // PCF2113 controller: Initialise Voltage booster for VLCD. VDD=3V3
+          // Note1: The PCF21XX family of controllers has several types that dont have an onboard voltage generator for V-LCD.
+          //        You must supply this LCD voltage externally and not enable VGen.
+          // Note2: The early versions of PCF2116 controllers (eg PCF2116C) can not generate sufficiently negative voltage for the LCD at a VDD of 3V3. 
+          //        You must supply this voltage externally and not enable VGen or you must use a higher VDD (e.g. 5V) and enable VGen.
+          //        More recent versions of the controller (eg PCF2116K) have an improved VGen that will work with 3V3.
+          // Note3: See datasheet, members of the PCF21XX family support different numbers of rows/columns. Not all can support 3 or 4 rows.
+          // Note4: See datasheet, you can also disable VGen by connecting Vo to VDD. VLCD will then be used directly as LCD voltage.
+          // Note5: PCF2113 is different wrt to VLCD generator !           
+          // Note6: See datasheet, the PCF21XX-C and PCF21XX-K use a non-standard character set. This may result is strange text when not corrected..
+                
           // Initialise Display configuration
           switch (_type) {
-            case LCD8x1:         //8x1 is a regular 1 line display
-            case LCD8x2B:        //8x2B is a special case of 16x1
 //            case LCD12x1:                                
-            case LCD16x1:                                            
             case LCD24x1:                    
-              _writeCommand(0x22);    //FUNCTION SET 4 bit, N=0/M=0 1-line/24 chars display mode, G=1 Booster on                               
+              _writeCommand(0x21);    //FUNCTION SET 4 bit, M=0 1-line/24 chars display mode, extended IS
+                                      //Note: 4 bit mode is ignored for I2C mode              
+              _writeCommand(0x9F);    //Set VLCD A : VGen for Chars and Icons
+              _writeCommand(0xDF);    //Set VLCD B : VGen for Icons Only
+              _writeCommand(0x20);    //FUNCTION SET 4 bit, M=0 1-line/24 chars display mode
+//              _writeCommand(0x24);    //FUNCTION SET 4 bit, M=1 2-line/12 chars display mode, standard IS
+              
+              wait_ms(10);            // Wait 10ms to ensure powered up                                                    
+              break;  
+
+//Tested OK for PCF2113
+//Note: PCF2113 is different wrt to VLCD generator ! 
+            case LCD12x2:                    
+              _writeCommand(0x21);    //FUNCTION SET 4 bit, M=0 1-line/24 chars display mode, extended IS
+                                      //Note: 4 bit mode is ignored for I2C mode              
+              _writeCommand(0x9F);    //Set VLCD A : VGen for Chars and Icons
+              _writeCommand(0xDF);    //Set VLCD B : VGen for Icons Only
+//              _writeCommand(0x20);    //FUNCTION SET 4 bit, M=0 1-line/24 chars display mode
+              _writeCommand(0x24);    //FUNCTION SET 4 bit, M=1 2-line/12 chars display mode, standard IS
+              
+              wait_ms(10);            // Wait 10ms to ensure powered up                                                    
+              break;  
+             
+            default:
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+                         
+          } // switch type    
+
+          break; // case PCF2113_3V3 Controller
+
+
+
+      case PCF2116_3V3:
+          // PCF2116 controller: Initialise Voltage booster for VLCD. VDD=3V3
+          // Note1: The PCF21XX family of controllers has several types that dont have an onboard voltage generator for V-LCD.
+          //        You must supply this LCD voltage externally and not enable VGen.
+          // Note2: The early versions of PCF2116 controllers (eg PCF2116C) can not generate sufficiently negative voltage for the LCD at a VDD of 3V3. 
+          //        You must supply this voltage externally and not enable VGen or you must use a higher VDD (e.g. 5V) and enable VGen.
+          //        More recent versions of the controller (eg PCF2116K) have an improved VGen that will work with 3V3.
+          // Note3: See datasheet, members of the PCF21XX family support different numbers of rows/columns. Not all can support 3 or 4 rows.
+          // Note4: See datasheet, you can also disable VGen by connecting Vo to VDD. VLCD will then be used directly as LCD voltage.
+          // Note5: PCF2113 is different wrt to VLCD generator !           
+          // Note6: See datasheet, the PCF21XX-C and PCF21XX-K use a non-standard character set. This may result is strange text when not corrected..
+                  
+          // Initialise Display configuration
+          switch (_type) {
+//            case LCD12x1:
+//            case LCD12x2:                                                                            
+            case LCD24x1:                    
+              _writeCommand(0x22);    //FUNCTION SET 4 bit, N=0/M=0 1-line/24 chars display mode, G=1 VGen on                               
                                       //Note: 4 bit mode is ignored for I2C mode
               wait_ms(10);            // Wait 10ms to ensure powered up                                                    
               break;  
 
-            case LCD12x3B:                    
-            case LCD12x4B:                                
-              _writeCommand(0x2E);    //FUNCTION SET 4 bit, N=1/M=1 4-line/12 chars display mode, G=1 Booster on                               
+            case LCD12x3D:                                
+            case LCD12x3D1:                                
+            case LCD12x4D:
+              _writeCommand(0x2E);    //FUNCTION SET 4 bit, N=1/M=1 4-line/12 chars display mode, G=1 VGen on                               
                                       //Note: 4 bit mode is ignored for I2C mode              
               wait_ms(10);            // Wait 10ms to ensure powered up                                                    
               break;  
-              
-            default:
-              // All other LCD types are initialised as 2 Line displays        
-              _writeCommand(0x2A);    //FUNCTION SET 4 bit, N=1/M=0 2-line/24 chars display mode, G=1 Booster on
-                                      //Note: 4 bit mode is ignored for I2C mode
 
+            case LCD24x2:
+              _writeCommand(0x2A);    //FUNCTION SET 4 bit, N=1/M=0 2-line/24 chars display mode, G=1 VGen on
+                                      //Note: 4 bit mode is ignored for I2C mode
               wait_ms(10);            // Wait 10ms to ensure powered up   
-              
-              
-              led1=!led1;
+
+            default:
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+            
           } // switch type    
 
-
-          break; // case PCF21XX_3V3 Controller
-
+          break; // case PCF2116_3V3 Controller
 
 //      case PCF21XX_5V:
-          // PCF21XX controller: No Voltage booster for VLCD. VDD=5V
-                              
+          // PCF21XX controller: No Voltage generator for VLCD. VDD=5V
+//@TODO                            
 
       case WS0010:         
           // WS0010 OLED controller: Initialise DC/DC Voltage converter for LEDs
-          // Note: supports 1 or 2 lines (and 16x100 graphics)
-          //       supports 4 fonts (English/Japanese (default), Western European-I, English/Russian, Western European-II)
+          // Note1: Identical to RS0010  
+          // Note2: supports 1 or 2 lines (and 16x100 graphics)
+          //        supports 4 fonts (English/Japanese (default), Western European-I, English/Russian, Western European-II)
                            // Cursor/Disp shift set 0001 SC RL  0 0
                            //
-                           // Mode en Power set     0001 GC PWR 1 1                           
+                           // Mode and Power set    0001 GC PWR 1 1                           
                            //  GC  = 0 (Graph Mode=1, Char Mode=0)             
-                           //  PWR =   (DC/DC On/Off)
-    
+                           //  PWR = 1 (DC/DC On/Off)
+   
+//@Todo: This may be needed to enable a warm reboot
           //_writeCommand(0x13);   // DC/DC off              
+          //wait_ms(10);           // Wait 10ms to ensure powered down                  
           _writeCommand(0x17);   // DC/DC on        
-          wait_ms(10);           // Wait 10ms to ensure powered up
-          
+          wait_ms(10);           // Wait 10ms to ensure powered up        
 
           // Initialise Display configuration
           switch (_type) {                    
@@ -388,21 +530,30 @@ void TextLCD_Base::_initCtrl() {
             case LCD8x2B:        //8x2B is a special case of 16x1
 //            case LCD12x1:                                
             case LCD16x1:                                            
-//            case LCD24x1:
-              _writeCommand(0x20); // Function set 001 DL N F - -
-                                   //  DL=0 (4 bits bus)             
-                                   //   N=0 (1 line)
-                                   //   F=0 (5x7 dots font)
+            case LCD24x1:
+              _writeCommand(0x20); // Function set 001 DL N F FT1 FT0
+                                   //  DL=0  (4 bits bus)             
+                                   //   N=0  (1 line)
+                                   //   F=0  (5x7 dots font)
+                                   //  FT=00 (00 = Engl/Jap, 01 = WestEur1, 10 = Engl/Russian, 11 = WestEur2
+              break;  
+
+            case LCD12x3D:            // Special mode for PCF2116
+            case LCD12x3D1:           // Special mode for PCF2116
+            case LCD12x4D:            // Special mode for PCF2116
+            case LCD24x4D:            // Special mode for KS0078
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
               break;  
 
             default:
-              // All other LCD types are initialised as 2 Line displays (including LCD40x4)       
-              _writeCommand(0x28); // Function set 001 DL N F - -
-                                   //  DL=0 (4 bits bus)
-                                   //   N=1 (2 lines)
-                                   //   F=0 (5x7 dots font, only option for 2 line display)
-                                   //    -  (Don't care)                                
-          
+              // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)       
+              _writeCommand(0x28); // Function set 001 DL N F FT1 FT0
+                                   //  DL=0  (4 bits bus)
+                                   //   N=1  (2 lines)
+                                   //   F=0  (5x7 dots font)
+                                   //  FT=00 (00 = Engl/Jap, 01 = WestEur1, 10 = Engl/Russian, 11 = WestEur2
+
+
               break;
            } // switch type
            
@@ -417,14 +568,25 @@ void TextLCD_Base::_initCtrl() {
             case LCD8x2B:        //8x2B is a special case of 16x1
 //            case LCD12x1:                                
             case LCD16x1:                                            
+//            case LCD20x1:                                                        
             case LCD24x1:
+//            case LCD40x1:            
               _writeCommand(0x20); // Function set 001 DL N F - -
                                    //  DL=0 (4 bits bus)             
                                    //   N=0 (1 line)
                                    //   F=0 (5x7 dots font)
               break;                                
                                                   
-            // All other LCD types are initialised as 2 Line displays (including LCD40x4)
+
+//            case LCD12x3D:            // Special mode for PCF2116
+//            case LCD12x3D1:           // Special mode for PCF2116
+//            case LCD12x4D:            // Special mode for PCF2116
+//            case LCD24x3D:            // Special mode for KS0078
+            case LCD24x4D:            // Special mode for KS0078
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+
+            // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)
             default:
               _writeCommand(0x28); // Function set 001 DL N F - -
                                    //  DL=0 (4 bits bus)
@@ -441,8 +603,7 @@ void TextLCD_Base::_initCtrl() {
     } // switch Controller specific initialisations 
     
 
-    // Controller general initialisations
-                                           
+    // Controller general initialisations                                          
     _writeCommand(0x01); // cls, and set cursor to 0
     wait_ms(10);         // The CLS command takes 1.64 ms.
                          // Since we are not using the Busy flag, Lets be safe and take 10 ms  
@@ -460,12 +621,10 @@ void TextLCD_Base::_initCtrl() {
                          //   R/L=1 Right
                          // 
 
-
 //    _writeCommand(0x0C); // Display Ctrl 0000 1 D C B
 //                         //   Display On, Cursor Off, Blink Off   
     setCursor(CurOff_BlkOff);     
     setMode(DispOn);     
-    led2=!led2;    
 }
 
 
@@ -499,7 +658,7 @@ void TextLCD_Base::cls() {
   }
                    
   setAddress(0, 0);  // Reset Cursor location
-                     // Note: this is needed because some rare displays (eg PCF21XX) don't use line 0 in the '3 Line' mode.   
+                     // Note: this is needed because some displays (eg PCF21XX) don't use line 0 in the '3 Line' mode.   
 }
 
 /** Locate cursor to a screen column and row
@@ -517,7 +676,7 @@ void TextLCD_Base::locate(int column, int row) {
    setAddress(column, row);
        
 }
-    
+   
 
 /** Write a single character (Stream implementation)
   */
@@ -574,7 +733,6 @@ void TextLCD_Base::_writeNibble(int value) {
     wait_us(1); // Datahold time
 
 // Enable is Low
-
 }
 
 
@@ -654,6 +812,7 @@ int TextLCD_Base::_address(int column, int row) {
   return 0x80 | getAddress(column, row);
 }
 
+#if(0)
 // This is new method to return the memory address based on row, column and displaytype.
 //
 /** Return the memoryaddress of screen column and row location
@@ -661,12 +820,18 @@ int TextLCD_Base::_address(int column, int row) {
    * @param column  The horizontal position from the left, indexed from 0
    * @param row     The vertical position from the top, indexed from 0
    * @param return  The memoryaddress of screen column and row location
+   *
+   *  Note: some configurations are commented out because they have not yet been tested due to lack of hardware   
    */
 int TextLCD_Base::getAddress(int column, int row) {
 
     switch (_type) {
         case LCD8x1:
-        case LCD24x1:        
+//        case LCD12x1:        
+//        case LCD16x1B:        
+//        case LCD20x1:        
+        case LCD24x1:
+//        case LCD40x1:                        
             return 0x00 + column;                        
 
         case LCD16x1:
@@ -676,7 +841,7 @@ int TextLCD_Base::getAddress(int column, int row) {
             else   
               return 0x40 + (column - 8);                        
 
-        case LCD8x2B:
+        case LCD8x2D:
             // LCD8x2B is a special layout of LCD16x1
             if (row==0) 
               return 0x00 + column;                        
@@ -702,6 +867,7 @@ int TextLCD_Base::getAddress(int column, int row) {
 
 // Special mode for PCF2116 
         case LCD12x3B:
+            //Display bottom three rows of four
             switch (row) {
                 case 0:
                     return 0x20 + column;
@@ -710,6 +876,19 @@ int TextLCD_Base::getAddress(int column, int row) {
                 case 2:
                     return 0x60 + column;
             }
+
+#if(0)
+        case LCD12x3C:
+            //Display top three rows of four        
+            switch (row) {
+                case 0:
+                    return 0x00 + column;
+                case 1:
+                    return 0x20 + column;
+                case 2:
+                    return 0x40 + column;
+            }
+#endif
 
         case LCD12x4:
             switch (row) {
@@ -815,6 +994,143 @@ int TextLCD_Base::getAddress(int column, int row) {
     }
 }
 
+#else
+
+//Test of Addressing Mode encoded in LCDType
+
+// This is new method to return the memory address based on row, column and displaytype.
+//
+/** Return the memoryaddress of screen column and row location
+   *
+   * @param column  The horizontal position from the left, indexed from 0
+   * @param row     The vertical position from the top, indexed from 0
+   * @param return  The memoryaddress of screen column and row location
+   *
+   *  Note: some configurations are commented out because they have not yet been tested due to lack of hardware   
+   */
+int TextLCD_Base::getAddress(int column, int row) {
+
+    switch (_addr_mode) {
+
+        case LCD_T_A:
+          //Default addressing mode for 1, 2 and 4 rows (except 40x4)
+          //The two available rows are split and stacked on top of eachother. Addressing for 3rd and 4th line continues where lines 1 and 2 were split.          
+          //Displays top rows when less than four are used.          
+          switch (row) {
+            case 0:
+              return 0x00 + column;
+            case 1:
+              return 0x40 + column;
+            case 2:
+              return 0x00 + _nr_cols + column;
+            case 3:
+              return 0x40 + _nr_cols + column;
+            // Should never get here.
+            default:            
+              return 0x00;                    
+            }
+          
+        case LCD_T_B:
+          // LCD8x2B is a special layout of LCD16x1
+          if (row==0) 
+            return 0x00 + column;                        
+          else   
+//            return _nr_cols + column;                                    
+            return 0x08 + column;                        
+
+        case LCD_T_C:
+          // LCD16x1C is a special layout of LCD8x2
+          if (column<8) 
+            return 0x00 + column;                        
+          else   
+            return 0x40 + (column - 8);                        
+
+// Not sure about this one, seems wrong.
+// Left in for compatibility with original library
+//        case LCD16x2B:      
+//            return 0x00 + (row * 40) + column;
+  
+
+        case LCD_T_D:
+          //Alternate addressing mode for 3 and 4 row displays (except 40x4). Used by PCF21XX, KS0078
+          //The 4 available rows start at a hardcoded address.                    
+          //Displays top rows when less than four are used.
+          switch (row) {
+            case 0:
+              return 0x00 + column;
+            case 1:
+              return 0x20 + column;
+            case 2:
+              return 0x40 + column;
+            case 3:
+              return 0x60 + column;
+            // Should never get here.
+            default:            
+              return 0x00;                    
+            }
+
+        case LCD_T_D1:
+          //Alternate addressing mode for 3 row displays. Used by PCF21XX, KS0078
+          //The 4 available rows start at a hardcoded address.                              
+          //Skips top row of 4 row display and starts display at row 1
+          switch (row) {
+            case 0:
+              return 0x20 + column;
+            case 1:
+              return 0x40 + column;
+            case 2:
+              return 0x60 + column;
+            // Should never get here.
+            default:            
+              return 0x00;                    
+            }
+        
+        case LCD_T_E:                
+          // LCD40x4 is a special case since it has 2 controllers.
+          // Each controller is configured as 40x2 (Type A)
+          if (row<2) { 
+            // Test to see if we need to switch between controllers  
+            if (_ctrl_idx != _LCDCtrl_0) {
+
+              // Second LCD controller Cursor Off
+              _setCursorAndDisplayMode(_currentMode, CurOff_BlkOff);    
+
+              // Select primary controller
+              _ctrl_idx = _LCDCtrl_0;
+
+              // Restore cursormode on primary LCD controller
+              _setCursorAndDisplayMode(_currentMode, _currentCursor);    
+            }           
+            
+            return 0x00 + (row * 0x40) + column;          
+          }
+          else {
+
+            // Test to see if we need to switch between controllers  
+            if (_ctrl_idx != _LCDCtrl_1) {
+              // Primary LCD controller Cursor Off
+              _setCursorAndDisplayMode(_currentMode, CurOff_BlkOff);    
+
+              // Select secondary controller
+              _ctrl_idx = _LCDCtrl_1;
+
+              // Restore cursormode on secondary LCD controller
+              _setCursorAndDisplayMode(_currentMode, _currentCursor);    
+            }           
+                                   
+            return 0x00 + ((row-2) * 0x40) + column;          
+          } 
+            
+        // Should never get here.
+        default:            
+            return 0x00;        
+    }
+}
+
+
+#endif
+
+
 
 /** Set the memoryaddress of screen column and row location
   *
@@ -852,8 +1168,16 @@ void TextLCD_Base::setAddress(int column, int row) {
 /** Return the number of columns
   *
   * @param return  The number of columns
+  *
+  * Note: some configurations are commented out because they have not yet been tested due to lack of hardware     
   */   
 int TextLCD_Base::columns() {
+    
+  // Columns encoded in b7..b0
+  //return (_type & 0xFF);          
+  return _nr_cols;          
+  
+#if(0)    
     switch (_type) {
         case LCD8x1:
         case LCD8x2:
@@ -862,6 +1186,7 @@ int TextLCD_Base::columns() {
         
         case LCD12x2:        
         case LCD12x3B:                
+//        case LCD12x3C:                        
         case LCD12x4:        
         case LCD12x4B:                
             return 12;        
@@ -873,15 +1198,18 @@ int TextLCD_Base::columns() {
         case LCD16x4:        
             return 16;
             
+//        case LCD20x1:
         case LCD20x2:
         case LCD20x4:
             return 20;
 
         case LCD24x1:
         case LCD24x2:
+//        case LCD24x3B:                
         case LCD24x4B:        
             return 24;        
 
+//        case LCD40x1:        
         case LCD40x2:
         case LCD40x4:
             return 40;        
@@ -890,17 +1218,28 @@ int TextLCD_Base::columns() {
         default:
             return 0;
     }
+#endif    
 }
 
 /** Return the number of rows
   *
   * @param return  The number of rows
+  *
+  * Note: some configurations are commented out because they have not yet been tested due to lack of hardware     
   */
 int TextLCD_Base::rows() {
+
+  // Rows encoded in b15..b8  
+  //return ((_type >> 8) & 0xFF); 
+  return _nr_rows;          
+    
+#if(0)    
     switch (_type) {
         case LCD8x1: 
         case LCD16x1:         
+//        case LCD20x1:                 
         case LCD24x1:                 
+//        case LCD40x1:                         
             return 1;           
 
         case LCD8x2:  
@@ -914,7 +1253,9 @@ int TextLCD_Base::rows() {
             return 2;
 
         case LCD12x3B:                
+//        case LCD12x3C:                        
 //        case LCD16x3:                
+//        case LCD24x3B:                
             return 3;
                     
         case LCD12x4:        
@@ -929,6 +1270,7 @@ int TextLCD_Base::rows() {
         default:
             return 0;        
     }
+#endif    
 }
 
 /** Set the Cursormode
@@ -981,14 +1323,12 @@ void TextLCD_Base::setMode(LCDMode displayMode) {
 
       // Configure secondary LCD controller    
       _setCursorAndDisplayMode(_currentMode, _currentCursor);
-
     }
   }
   else {
     // Configure primary LCD controller
     _setCursorAndDisplayMode(_currentMode, _currentCursor);
-  }   
-    
+  }       
 }
 
 
@@ -999,7 +1339,6 @@ void TextLCD_Base::_setCursorAndDisplayMode(LCDMode displayMode, LCDCursor curso
     // Configure current LCD controller       
     _writeCommand(0x08 | displayMode | cursorType);
 }
-
 
 /** Set the Backlight mode
   *
@@ -1062,12 +1401,10 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
    
   //Select DD RAM again for current LCD controller
   int addr = getAddress(_column, _row);
-  _writeCommand(0x80 | addr);
-  
+  _writeCommand(0x80 | addr);  
 }
 
 //--------- End TextLCD_Base -----------
-
 
 
 //--------- Start TextLCD Bus -----------
@@ -1109,9 +1446,7 @@ TextLCD::TextLCD(PinName rs, PinName e,
   }  
                                                                            
   _init();
-
 }
-
 
 /** Destruct a TextLCD interface for using regular mbed pins
   *
@@ -1148,7 +1483,6 @@ void TextLCD::_setEnable(bool value) {
       if (_e2 != NULL) {_e2->write(0);}  //Reset E2 bit     
     }  
   }    
-
 }    
 
 // Set RS pin
@@ -1161,7 +1495,6 @@ void TextLCD::_setRS(bool value) {
   else  {
     _rs  = 0;    // Reset RS bit 
   }  
-
 }    
 
 /** Set BL pin
@@ -1186,7 +1519,6 @@ void TextLCD::_setBL(bool value) {
 void TextLCD::_setData(int value) {
   _d = value & 0x0F;   // Write Databits 
 }    
-
     
 //----------- End TextLCD ---------------
 
@@ -1206,12 +1538,10 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
                               
   _slaveAddress = deviceAddress & 0xFE;
 
-
   // Setup the I2C bus
   // The max bitrate for PCF8574 is 100kbit, the max bitrate for MCP23008 is 400kbit, 
 //  _i2c->frequency(100000);
   
-
 #if (MCP23008==1)
   // MCP23008 portexpander Init
   _write_register(IODIR,   0x00);  // All outputs
@@ -1241,8 +1571,7 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
 #endif
 
-  _init();
-    
+  _init();    
 }
 
 // Set E pin (or E2 pin)
@@ -1265,7 +1594,6 @@ void TextLCD_I2C::_setEnable(bool value) {
       _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
     }  
   }    
-
 
 #if (MCP23008==1)
   // MCP23008 portexpander
@@ -1291,7 +1619,6 @@ void TextLCD_I2C::_setRS(bool value) {
     _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
   }
 
-
 #if (MCP23008==1)
   // MCP23008 portexpander
   
@@ -1302,8 +1629,7 @@ void TextLCD_I2C::_setRS(bool value) {
 
   // write the new data to the I2C portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
-#endif
-                  
+#endif                  
 }    
 
 // Set BL pin
@@ -1327,10 +1653,8 @@ void TextLCD_I2C::_setBL(bool value) {
 
   // write the new data to the I2C portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
-#endif
-                 
+#endif                 
 }    
-
 
 
 // Place the 4bit data on the databus
@@ -1387,8 +1711,7 @@ void TextLCD_I2C::_setData(int value) {
 void TextLCD_I2C::_write_register (int reg, int value) {
   char data[] = {reg, value};
     
-  _i2c->write(_slaveAddress, data, 2);
- 
+  _i2c->write(_slaveAddress, data, 2); 
 }
 
 //---------- End TextLCD_I2C ------------
@@ -1407,15 +1730,14 @@ void TextLCD_I2C::_write_register (int reg, int value) {
 TextLCD_I2C_N::TextLCD_I2C_N(I2C *i2c, char deviceAddress, LCDType type, PinName bl, LCDCtrl ctrl) : 
                                TextLCD_Base(type, ctrl), 
                                _i2c(i2c){
-                              
+  
   _slaveAddress = deviceAddress & 0xFE;
   
   // Setup the I2C bus
   // The max bitrate for ST7032i is 400kbit, lets stick to default here
   _i2c->frequency(100000);
 //  _i2c->frequency(50000);
-
-        
+       
   // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
   if (bl != NC) {
     _bl = new DigitalOut(bl);   //Construct new pin 
@@ -1426,7 +1748,29 @@ TextLCD_I2C_N::TextLCD_I2C_N(I2C *i2c, char deviceAddress, LCDType type, PinName
     _bl = NULL;                 //Construct dummy pin     
   }  
   
-  _init();
+#if(0)
+  //Sanity check
+  switch (_ctrl) {
+    case ST7032_3V3:
+    case ST7032_5V:    
+    case PCF21XX_3V3:    
+//    case PCF21XX_5V:        
+      _init();
+      break;
+    
+    default: 
+      error("Error: LCD Controller type does not support native I2C interface\n\r"); 
+  }  
+#endif
+
+  //Sanity check
+  if (_ctrl & LCD_C_I2C) {
+    _init();      
+  }
+  else {
+    error("Error: LCD Controller type does not support native I2C interface\n\r");           
+  }
+
 }
 
 TextLCD_I2C_N::~TextLCD_I2C_N() {
@@ -1440,7 +1784,16 @@ void TextLCD_I2C_N::_setEnable(bool value) {
 // Set RS pin
 // Used for mbed pins, I2C bus expander or SPI shiftregister and native I2C or SPI
 void TextLCD_I2C_N::_setRS(bool value) {
-  
+// The controlbyte defines the meaning of the next byte. This next byte can either be data or command.
+// Start Slaveaddress+RW  b7 b6 b5 b4 b3 b2 b1 b0   b7...........b0  Stop
+//                        Co RS RW  0  0  0  0  0   command or data
+//
+//   C0=1 indicates that another controlbyte will follow after the next data or command byte 
+//   RS=1 means that next byte is data, RS=0 means that next byte is command
+//   RW=0 means write to controller. RW=1 means that controller will be read from after the next command. 
+//        Many native I2C controllers dont support this option and it is not used by this lib. 
+//
+
   if (value) {
     _controlbyte = 0x40; // Next byte is data, No more control bytes will follow
   }
@@ -1455,26 +1808,28 @@ void TextLCD_I2C_N::_setBL(bool value) {
         _bl->write(value);   
     }    
 }    
-
     
 // Not used in this mode
 void TextLCD_I2C_N::_setData(int value) {
 }    
 
-
 // Write a byte using I2C
 void TextLCD_I2C_N::_writeByte(int value) {
-
+// The controlbyte defines the meaning of the next byte. This next byte can either be data or command.
+// Start Slaveaddress+RW  b7 b6 b5 b4 b3 b2 b1 b0   b7...........b0  Stop
+//                        Co RS RW  0  0  0  0  0   command or data
+//
+//   C0=1 indicates that another controlbyte will follow after the next data or command byte 
+//   RS=1 means that next byte is data, RS=0 means that next byte is command
+//   RW=0 means write to controller. RW=1 means that controller will be read from after the next command. 
+//        Many native I2C controllers dont support this option and it is not used by this lib. 
+//
   char data[] = {_controlbyte, value};
     
-  _i2c->write(_slaveAddress, data, 2);
- 
+  _i2c->write(_slaveAddress, data, 2); 
 }
 
-
 //-------- End TextLCD_I2C_N ------------
-
-
 
 
 //--------- Start TextLCD_SPI -----------
@@ -1497,7 +1852,6 @@ TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
   _spi->frequency(500000);    
   //_spi.frequency(1000000);    
 
-
   // Init the portexpander bus
   _lcd_bus = D_LCD_BUS_DEF;
   
@@ -1505,9 +1859,8 @@ TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
   _setCS(false);  
   _spi->write(_lcd_bus);   
   _setCS(true);  
-  
-  _init();
-    
+
+  _init();   
 }
 
 // Set E pin (or E2 pin)
@@ -1534,8 +1887,7 @@ void TextLCD_SPI::_setEnable(bool value) {
   // write the new data to the SPI portexpander
   _setCS(false);  
   _spi->write(_lcd_bus);   
-  _setCS(true);  
-  
+  _setCS(true);    
 }    
 
 // Set RS pin
@@ -1553,7 +1905,6 @@ void TextLCD_SPI::_setRS(bool value) {
   _setCS(false);  
   _spi->write(_lcd_bus);   
   _setCS(true);     
-
 }    
 
 // Set BL pin
@@ -1570,10 +1921,8 @@ void TextLCD_SPI::_setBL(bool value) {
   // write the new data to the SPI portexpander
   _setCS(false);  
   _spi->write(_lcd_bus);   
-  _setCS(true);  
-     
+  _setCS(true);      
 }    
-
 
 // Place the 4bit data on the databus
 // Used for mbed pins, I2C bus expander or SPI shiftregister
@@ -1614,10 +1963,8 @@ void TextLCD_SPI::_setData(int value) {
   // write the new data to the SPI portexpander
   _setCS(false);  
   _spi->write(_lcd_bus);   
-  _setCS(true);  
-        
+  _setCS(true);          
 }    
-
 
 // Set CS line.
 // Only used for SPI bus
@@ -1636,7 +1983,7 @@ void TextLCD_SPI::_setCS(bool value) {
 
 //--------- Start TextLCD_SPI_N ---------
 
- /** Create a TextLCD interface using a controller with a native SPI interface
+ /** Create a TextLCD interface using a controller with a native SPI4 interface
    *
    * @param spi             SPI Bus
    * @param cs              chip select pin (active low)
@@ -1665,8 +2012,28 @@ TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, Pin
     // No Hardware Backlight pin       
     _bl = NULL;                 //Construct dummy pin     
   }  
-  
-  _init();
+
+#if(0)
+  //Sanity check
+  switch (_ctrl) {
+    case ST7032_3V3:
+    case ST7032_5V:    
+    case WS0010:        
+      _init();
+      break;
+    
+    default: 
+      error("Error: LCD Controller type does not support native SPI4 interface\n\r"); 
+  }     
+#endif
+
+  //Sanity check
+  if (_ctrl & LCD_C_SPI4) {
+    _init();      
+  }
+  else {
+    error("Error: LCD Controller type does not support native SPI4 interface\n\r");           
+  }
 }
 
 TextLCD_SPI_N::~TextLCD_SPI_N() {
@@ -1694,7 +2061,6 @@ void TextLCD_SPI_N::_setBL(bool value) {
 void TextLCD_SPI_N::_setData(int value) {
 }    
 
-
 // Write a byte using SPI
 void TextLCD_SPI_N::_writeByte(int value) {
     _cs = 0;
@@ -1703,12 +2069,193 @@ void TextLCD_SPI_N::_writeByte(int value) {
     wait_us(1);
     _cs = 1;
 }
-    
-
-
+  
 //-------- End TextLCD_SPI_N ------------
 
 
 
+#if(0)
+//Code checked out on logic analyser. Not yet tested on hardware..
+
+//-------- Start TextLCD_SPI_N_3_9 --------
+
+ /** Create a TextLCD interface using a controller with a native SPI3 9 bits interface
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param bl              Backlight control line (optional, default = NC)  
+   * @param ctrl            LCD controller (default = AIP31068) 
+   */       
+TextLCD_SPI_N_3_9::TextLCD_SPI_N_3_9(SPI *spi, PinName cs, LCDType type, PinName bl, LCDCtrl ctrl) :
+                                     TextLCD_Base(type, ctrl), 
+                                     _spi(spi),        
+                                     _cs(cs) {      
+        
+  // Setup the spi for 9 bit data, low steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+  _spi->format(9,0);
+  _spi->frequency(1000000);    
+  
+  // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
+  if (bl != NC) {
+    _bl = new DigitalOut(bl);   //Construct new pin 
+    _bl->write(0);              //Deactivate    
+  }
+  else {
+    // No Hardware Backlight pin       
+    _bl = NULL;                 //Construct dummy pin     
+  }  
+
+  //Sanity check
+  if (_ctrl & LCD_C_SPI3_9) {
+    _init();      
+  }
+  else {
+    error("Error: LCD Controller type does not support native SPI3 9 bits interface\n\r");           
+  }
+}
+
+TextLCD_SPI_N_3_9::~TextLCD_SPI_N_3_9() {
+   if (_bl != NULL) {delete _bl;}  // BL pin
+}
+
+// Not used in this mode
+void TextLCD_SPI_N_3_9::_setEnable(bool value) {
+}    
+
+// Set RS pin
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_SPI_N_3_9::_setRS(bool value) {
+// The controlbits define the meaning of the next byte. This next byte can either be data or command.
+//   b8  b7...........b0 
+//   RS  command or data
+//
+//   RS=1 means that next byte is data, RS=0 means that next byte is command
+//
+
+  if (value) {
+    _controlbyte = 0x01; // Next byte is data
+  }
+  else {
+    _controlbyte = 0x00; // Next byte is command
+  }
+   
+}    
+
+// Set BL pin
+void TextLCD_SPI_N_3_9::_setBL(bool value) {
+    if (_bl) {
+        _bl->write(value);   
+    }    
+}    
+
+// Not used in this mode
+void TextLCD_SPI_N_3_9::_setData(int value) {
+}    
+
+// Write a byte using SPI3 9 bits mode
+void TextLCD_SPI_N_3_9::_writeByte(int value) {
+    _cs = 0;
+    wait_us(1);
+    _spi->write( (_controlbyte << 8) | (value & 0xFF));
+    wait_us(1);
+    _cs = 1;
+}
+  
+//------- End TextLCD_SPI_N_3_9 -----------
+#endif
 
 
+#if(0)
+//Code checked out on logic analyser. Not yet tested on hardware..
+
+//------- Start TextLCD_SPI_N_3_10 --------
+
+ /** Create a TextLCD interface using a controller with a native SPI3 10 bits interface
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param bl              Backlight control line (optional, default = NC)  
+   * @param ctrl            LCD controller (default = AIP31068) 
+   */       
+TextLCD_SPI_N_3_10::TextLCD_SPI_N_3_10(SPI *spi, PinName cs, LCDType type, PinName bl, LCDCtrl ctrl) :
+                                       TextLCD_Base(type, ctrl), 
+                                       _spi(spi),        
+                                       _cs(cs) {      
+        
+  // Setup the spi for 10 bit data, low steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+  _spi->format(10,0);
+  _spi->frequency(1000000);    
+  
+  // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
+  if (bl != NC) {
+    _bl = new DigitalOut(bl);   //Construct new pin 
+    _bl->write(0);              //Deactivate    
+  }
+  else {
+    // No Hardware Backlight pin       
+    _bl = NULL;                 //Construct dummy pin     
+  }  
+
+  //Sanity check
+  if (_ctrl & LCD_C_SPI3_10) {
+    _init();      
+  }
+  else {
+    error("Error: LCD Controller type does not support native SPI3 10 bits interface\n\r");           
+  }
+}
+
+TextLCD_SPI_N_3_10::~TextLCD_SPI_N_3_10() {
+   if (_bl != NULL) {delete _bl;}  // BL pin
+}
+
+// Not used in this mode
+void TextLCD_SPI_N_3_10::_setEnable(bool value) {
+}    
+
+// Set RS pin
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_SPI_N_3_10::_setRS(bool value) {
+// The controlbits define the meaning of the next byte. This next byte can either be data or command.
+//   b9 b8  b7...........b0 
+//   RS RW  command or data
+//
+//   RS=1 means that next byte is data, RS=0 means that next byte is command
+//   RW=0 means that next byte is writen, RW=1 means that next byte is read (not used in this lib)
+//
+
+  if (value) {
+    _controlbyte = 0x02; // Next byte is data
+  }
+  else {
+    _controlbyte = 0x00; // Next byte is command
+  }
+   
+}    
+
+// Set BL pin
+void TextLCD_SPI_N_3_10::_setBL(bool value) {
+    if (_bl) {
+        _bl->write(value);   
+    }    
+}    
+
+// Not used in this mode
+void TextLCD_SPI_N_3_10::_setData(int value) {
+}    
+
+// Write a byte using SPI3 10 bits mode
+void TextLCD_SPI_N_3_10::_writeByte(int value) {
+    _cs = 0;
+    wait_us(1);
+    _spi->write( (_controlbyte << 8) | (value & 0xFF));
+    wait_us(1);
+    _cs = 1;
+}
+  
+//------- End TextLCD_SPI_N_3_10 ----------
+#endif
