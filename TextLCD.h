@@ -70,8 +70,8 @@
 //LCD and serial portexpanders should be wired accordingly 
 //
 //Select Hardware module (one option only)
-#define DEFAULT        0
-#define ADAFRUIT       1
+#define DEFAULT        1
+#define ADAFRUIT       0
 #define DFROBOT        0
 
 #if (DEFAULT==1)
@@ -347,38 +347,6 @@ public:
     };
 
 
-#if(0)
-    /** LCD panel format */
-    enum LCDType {
-        LCD8x1,     /**<  8x1 LCD panel */    
-        LCD8x2,     /**<  8x2 LCD panel */          
-        LCD8x2B,    /**<  8x2 LCD panel (actually 16x1) */                  
-//        LCD12x1,    /**< 12x1 LCD panel */                          
-//        LCD12x1B,   /**< 12x1 LCD panel, special mode PCF21XX */                                  
-        LCD12x2,    /**< 12x2 LCD panel */                          
-        LCD12x3B,   /**< 12x3 LCD panel, special mode PCF21XX */                                  
-//        LCD12x3C,   /**< 12x3 LCD panel, special mode PCF21XX */                                          
-        LCD12x4,    /**< 12x4 LCD panel */                  
-        LCD12x4B,   /**< 12x4 LCD panel, special mode PCF21XX */                                          
-        LCD16x1,    /**< 16x1 LCD panel (actually 8x2) */          
-//        LCD16x1B,   /**< 16x1 LCD panel */                  
-        LCD16x2,    /**< 16x2 LCD panel (default) */
-        LCD16x2B,   /**< 16x2 LCD panel alternate addressing */
-//        LCD16x3B,   /**< 16x3 LCD panel, special mode ST7036 */                
-        LCD16x4,    /**< 16x4 LCD panel */        
-//        LCD20x1,    /**< 20x1 LCD panel */
-        LCD20x2,    /**< 20x2 LCD panel */
-        LCD20x4,    /**< 20x4 LCD panel */
-        LCD24x4B,   /**< 24x4 LCD panel, special mode KS0078 */                                                  
-        LCD24x1,    /**< 24x1 LCD panel */        
-        LCD24x2,    /**< 24x2 LCD panel */        
-//        LCD40x1,    /**< 40x1 LCD panel */                        
-        LCD40x2,    /**< 40x2 LCD panel */                
-        LCD40x4     /**< 40x4 LCD panel, Two controller version */                        
-    };
-#endif
-
-
     /** LCD Controller Device */
     enum LCDCtrl {
         HD44780     = 0,                                             /**<  HD44780 (default)                            */    
@@ -393,20 +361,6 @@ public:
         AIP31068    = 9 | (LCD_C_SPI3_9  | LCD_C_I2C | LCD_C_BST)    /**<  AIP31068 I2C, SPI3                           */                           
     };
 
-
-#if(0)
-    /** LCD Controller Device */
-    enum LCDCtrl {
-        HD44780,     /**<  HD44780 (default)                           */    
-        WS0010,      /**<  WS0010  OLED Controller, 4/8 bit, SPI       */    
-        ST7036,      /**<  ST7036  3V3 with Booster, 4/8 bit, SPI      */   
-        ST7032_3V3,  /**<  ST7032  3V3 with Booster, 4/8 bit, SPI, I2C */   
-        ST7032_5V,   /**<  ST7032  5V no Booster, 4/8 bit, SPI, I2C    */           
-        KS0078,      /**<  KS0078  24x4 support, 4/8 bit               */                   
-        PCF21XX_3V3, /**<  PCF21XX 3V3 with Booster, 4/8 bit, I2C      */                           
-//        PCF21XX_5V   /**<  PCF21XX 5V no Booster, 4/8 bit, I2C         */        
-    };
-#endif
 
     /** LCD Cursor control */
     enum LCDCursor {
