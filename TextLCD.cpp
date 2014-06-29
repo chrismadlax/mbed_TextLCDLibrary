@@ -812,191 +812,6 @@ int TextLCD_Base::_address(int column, int row) {
   return 0x80 | getAddress(column, row);
 }
 
-#if(0)
-// This is new method to return the memory address based on row, column and displaytype.
-//
-/** Return the memoryaddress of screen column and row location
-   *
-   * @param column  The horizontal position from the left, indexed from 0
-   * @param row     The vertical position from the top, indexed from 0
-   * @param return  The memoryaddress of screen column and row location
-   *
-   *  Note: some configurations are commented out because they have not yet been tested due to lack of hardware   
-   */
-int TextLCD_Base::getAddress(int column, int row) {
-
-    switch (_type) {
-        case LCD8x1:
-//        case LCD12x1:        
-//        case LCD16x1B:        
-//        case LCD20x1:        
-        case LCD24x1:
-//        case LCD40x1:                        
-            return 0x00 + column;                        
-
-        case LCD16x1:
-            // LCD16x1 is a special layout of LCD8x2
-            if (column<8) 
-              return 0x00 + column;                        
-            else   
-              return 0x40 + (column - 8);                        
-
-        case LCD8x2D:
-            // LCD8x2B is a special layout of LCD16x1
-            if (row==0) 
-              return 0x00 + column;                        
-            else   
-              return 0x08 + column;                        
-
-        case LCD8x2:               
-        case LCD12x2:                
-        case LCD16x2:
-        case LCD20x2:
-        case LCD24x2:        
-        case LCD40x2:                
-            return 0x00 + (row * 0x40) + column;
-
-// Not sure about this one, seems wrong.
-// Left in for compatibility with original library
-        case LCD16x2B:      
-            return 0x00 + (row * 40) + column;
-    
-
-// Special mode for ST7036 
-//        case LCD16x3:
-
-// Special mode for PCF2116 
-        case LCD12x3B:
-            //Display bottom three rows of four
-            switch (row) {
-                case 0:
-                    return 0x20 + column;
-                case 1:
-                    return 0x40 + column;
-                case 2:
-                    return 0x60 + column;
-            }
-
-#if(0)
-        case LCD12x3C:
-            //Display top three rows of four        
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x20 + column;
-                case 2:
-                    return 0x40 + column;
-            }
-#endif
-
-        case LCD12x4:
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x40 + column;
-                case 2:
-                    return 0x0C + column;
-                case 3:
-                    return 0x4C + column;
-            }
-
-// Special mode for PCF2116 (and KS0078) 
-        case LCD12x4B:
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x20 + column;
-                case 2:
-                    return 0x40 + column;
-                case 3:
-                    return 0x60 + column;                   
-            }
-
-        case LCD16x4:
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x40 + column;
-                case 2:
-                    return 0x10 + column;
-                case 3:
-                    return 0x50 + column;
-            }
-
-        case LCD20x4:
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x40 + column;
-                case 2:
-                    return 0x14 + column;
-                case 3:
-                    return 0x54 + column;
-            }
-
-// Special mode for KS0078
-        case LCD24x4B:
-            switch (row) {
-                case 0:
-                    return 0x00 + column;
-                case 1:
-                    return 0x20 + column;
-                case 2:
-                    return 0x40 + column;
-                case 3:
-                    return 0x60 + column;
-            }
-
-        case LCD40x4:                
-          // LCD40x4 is a special case since it has 2 controllers
-          // Each controller is configured as 40x2
-          if (row<2) { 
-            // Test to see if we need to switch between controllers  
-            if (_ctrl_idx != _LCDCtrl_0) {
-
-              // Second LCD controller Cursor Off
-              _setCursorAndDisplayMode(_currentMode, CurOff_BlkOff);    
-
-              // Select primary controller
-              _ctrl_idx = _LCDCtrl_0;
-
-              // Restore cursormode on primary LCD controller
-              _setCursorAndDisplayMode(_currentMode, _currentCursor);    
-            }           
-            
-            return 0x00 + (row * 0x40) + column;          
-          }
-          else {
-
-            // Test to see if we need to switch between controllers  
-            if (_ctrl_idx != _LCDCtrl_1) {
-              // Primary LCD controller Cursor Off
-              _setCursorAndDisplayMode(_currentMode, CurOff_BlkOff);    
-
-              // Select secondary controller
-              _ctrl_idx = _LCDCtrl_1;
-
-              // Restore cursormode on secondary LCD controller
-              _setCursorAndDisplayMode(_currentMode, _currentCursor);    
-            }           
-                                   
-            return 0x00 + ((row-2) * 0x40) + column;          
-          } 
-            
-// Should never get here.
-        default:            
-            return 0x00;        
-    }
-}
-
-#else
-
-//Test of Addressing Mode encoded in LCDType
 
 // This is new method to return the memory address based on row, column and displaytype.
 //
@@ -1128,10 +943,6 @@ int TextLCD_Base::getAddress(int column, int row) {
 }
 
 
-#endif
-
-
-
 /** Set the memoryaddress of screen column and row location
   *
   * @param column  The horizontal position from the left, indexed from 0
@@ -1175,50 +986,7 @@ int TextLCD_Base::columns() {
     
   // Columns encoded in b7..b0
   //return (_type & 0xFF);          
-  return _nr_cols;          
-  
-#if(0)    
-    switch (_type) {
-        case LCD8x1:
-        case LCD8x2:
-        case LCD8x2B:                
-            return 8;
-        
-        case LCD12x2:        
-        case LCD12x3B:                
-//        case LCD12x3C:                        
-        case LCD12x4:        
-        case LCD12x4B:                
-            return 12;        
-
-        case LCD16x1:        
-        case LCD16x2:
-        case LCD16x2B:
-//        case LCD16x3:                        
-        case LCD16x4:        
-            return 16;
-            
-//        case LCD20x1:
-        case LCD20x2:
-        case LCD20x4:
-            return 20;
-
-        case LCD24x1:
-        case LCD24x2:
-//        case LCD24x3B:                
-        case LCD24x4B:        
-            return 24;        
-
-//        case LCD40x1:        
-        case LCD40x2:
-        case LCD40x4:
-            return 40;        
-        
-// Should never get here.
-        default:
-            return 0;
-    }
-#endif    
+  return _nr_cols;           
 }
 
 /** Return the number of rows
@@ -1232,45 +1000,6 @@ int TextLCD_Base::rows() {
   // Rows encoded in b15..b8  
   //return ((_type >> 8) & 0xFF); 
   return _nr_rows;          
-    
-#if(0)    
-    switch (_type) {
-        case LCD8x1: 
-        case LCD16x1:         
-//        case LCD20x1:                 
-        case LCD24x1:                 
-//        case LCD40x1:                         
-            return 1;           
-
-        case LCD8x2:  
-        case LCD8x2B:                        
-        case LCD12x2:                      
-        case LCD16x2:
-        case LCD16x2B:
-        case LCD20x2:
-        case LCD24x2:        
-        case LCD40x2:                
-            return 2;
-
-        case LCD12x3B:                
-//        case LCD12x3C:                        
-//        case LCD16x3:                
-//        case LCD24x3B:                
-            return 3;
-                    
-        case LCD12x4:        
-        case LCD12x4B:                
-        case LCD16x4:
-        case LCD20x4:
-        case LCD24x4B:        
-        case LCD40x4:
-            return 4;
-
-// Should never get here.      
-        default:
-            return 0;        
-    }
-#endif    
 }
 
 /** Set the Cursormode
@@ -1283,8 +1012,7 @@ void TextLCD_Base::setCursor(LCDCursor cursorMode) {
   _currentCursor = cursorMode;
     
   // Configure only current LCD controller
-  _setCursorAndDisplayMode(_currentMode, _currentCursor);
-    
+  _setCursorAndDisplayMode(_currentMode, _currentCursor);    
 }
 
 /** Set the Displaymode
@@ -1748,21 +1476,6 @@ TextLCD_I2C_N::TextLCD_I2C_N(I2C *i2c, char deviceAddress, LCDType type, PinName
     _bl = NULL;                 //Construct dummy pin     
   }  
   
-#if(0)
-  //Sanity check
-  switch (_ctrl) {
-    case ST7032_3V3:
-    case ST7032_5V:    
-    case PCF21XX_3V3:    
-//    case PCF21XX_5V:        
-      _init();
-      break;
-    
-    default: 
-      error("Error: LCD Controller type does not support native I2C interface\n\r"); 
-  }  
-#endif
-
   //Sanity check
   if (_ctrl & LCD_C_I2C) {
     _init();      
@@ -2012,20 +1725,6 @@ TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, Pin
     // No Hardware Backlight pin       
     _bl = NULL;                 //Construct dummy pin     
   }  
-
-#if(0)
-  //Sanity check
-  switch (_ctrl) {
-    case ST7032_3V3:
-    case ST7032_5V:    
-    case WS0010:        
-      _init();
-      break;
-    
-    default: 
-      error("Error: LCD Controller type does not support native SPI4 interface\n\r"); 
-  }     
-#endif
 
   //Sanity check
   if (_ctrl & LCD_C_SPI4) {
