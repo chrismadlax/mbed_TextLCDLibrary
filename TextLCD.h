@@ -12,6 +12,8 @@
  *               2014, v10: WH, Added Class for Native I2C controllers such as ST7032i, Added support for MCP23008 I2C portexpander, Added support for Adafruit module  
  *               2014, v11: WH, Added support for native I2C controllers such as PCF21XX, Improved the _initCtrl() method to deal with differences between all supported controllers  
  *               2014, v12: WH, Added support for native I2C controller PCF2119 and native I2C/SPI controllers SSD1803, ST7036, added setContrast method (by JH1PJL) for supported devices (eg ST7032i) 
+ *               2014, v13: WH, Added support for controllers US2066/SSD1311 (OLED), added setUDCBlink method for supported devices (eg SSD1803), fixed issue in setPower() 
+ *@Todo Add AC780S/KS0066i
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -130,7 +132,7 @@
 //
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default Arduino hardware and so it does not support LCD40x4 (second controller)
-//      BL is used to control backlight
+//      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
 #define D_LCD_PIN_RS   0
 #define D_LCD_PIN_RW   1
 #define D_LCD_PIN_E    2
@@ -225,10 +227,15 @@
 #define SSD1803_SA0    0x78
 #define SSD1803_SA1    0x7A
 
-/* US2066 I2C slave address */
+/* US2066/SSD1311 I2C slave address */
 #define US2066_SA0     0x78
 #define US2066_SA1     0x7A
 
+/* AC780 I2C slave address */
+#define AC780_SA0      0x78
+#define AC780_SA1      0x7A
+#define AC780_SA2      0x7C
+#define AC780_SA3      0x7E
 
 //Some native I2C controllers dont support ACK. Set define to '0' to allow code to proceed even without ACK
 //#define LCD_I2C_ACK    0
@@ -285,30 +292,35 @@
 #define LCD_C_PDN      0x00080000  /*Power Down          */
 
 
-// Contrast setting, 5 significant bits (only supported for controllers with extended features)
+// Contrast setting, 6 significant bits (only supported for controllers with extended features)
 // Voltage Multiplier setting, 2 or 3 significant bits (only supported for controllers with extended features)
 #define LCD_DEF_CONTRAST    0x20
 
-//ST7032 EastRising display
-//ST7036 EA DOGM163 display
-//Contrast setting 5 significant bits
+//ST7032 EastRising ERC1602FS-4 display
+//Contrast setting 6 significant bits
 //Voltage Multiplier setting 3 significant bits
 #define LCD_ST7032_CONTRAST 0x18
 #define LCD_ST7032_RAB      0x04
 
+//ST7036 EA DOGM1603 display
+//Contrast setting 6 significant bits
+//Voltage Multiplier setting 3 significant bits
 #define LCD_ST7036_CONTRAST 0x28
 #define LCD_ST7036_RAB      0x04
 
-
 //SSD1803 EA DOGM204 display
-//Contrast setting 5 significant bits
+//Contrast setting 6 significant bits
 //Voltage Multiplier setting 3 significant bits
 #define LCD_SSD1_CONTRAST   0x28
 #define LCD_SSD1_RAB        0x06
 
+//US2066/SSD1311 EastRising ER-OLEDM2002-4 display
+//Contrast setting 8 significant bits, use 6 for compatibility
+#define LCD_US20_CONTRAST   0x3F
+//#define LCD_US20_CONTRAST   0x1F
 
 //PCF2113, PCF2119 display
-//Contrast setting 5 significant bits
+//Contrast setting 6 significant bits
 //Voltage Multiplier setting 2 significant bits
 #define LCD_PCF2_CONTRAST   0x20
 #define LCD_PCF2_S12        0x02
@@ -379,7 +391,7 @@ extern const char udc_All[];
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
- * @brief Currently supports 8x1, 8x2, 12x2, 12x4, 16x1, 16x2, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
+ * @brief Currently supports 8x1, 8x2, 12x2, 12x3, 12x4, 16x1, 16x2, 16x3, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
  *        Interface options include direct mbed pins, I2C portexpander (PCF8474/PCF8574A or MCP23008) or SPI bus shiftregister (74595) and some native I2C or SPI devices 
  *
  */
@@ -387,6 +399,7 @@ class TextLCD_Base : public Stream {
 public:
 
     /** LCD panel format */
+    // The commented out types exist but have not yet been tested with the library
     enum LCDType {
 //        LCD6x1     = (LCD_T_A | LCD_T_C6 | LCD_T_R1),     /**<  6x1 LCD panel */          
 //        LCD6x2     = (LCD_T_A | LCD_T_C6 | LCD_T_R2),     /**<  6x2 LCD panel */          
@@ -422,10 +435,12 @@ public:
 //        LCD24x3D   = (LCD_T_D | LCD_T_C24 | LCD_T_R3),    /**< 24x3 LCD panel */                
 //        LCD24x3D1  = (LCD_T_D | LCD_T_C24 | LCD_T_R3),    /**< 24x3 LCD panel */                        
         LCD24x4D   = (LCD_T_D | LCD_T_C24 | LCD_T_R4),    /**< 24x4 LCD panel, special mode KS0078 */                                                          
-//        LCD32x1    = (LCD_T_A | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel */                
+//        LCD32x1    = (LCD_T_A | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel */
+//        LCD32x1C   = (LCD_T_C | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel (actually 16x2) */                                        
 //        LCD32x2    = (LCD_T_A | LCD_T_C32 | LCD_T_R2),    /**< 32x2 LCD panel */                        
 //        LCD32x4    = (LCD_T_A | LCD_T_C32 | LCD_T_R4),    /**< 32x4 LCD panel */                        
 //        LCD40x1    = (LCD_T_A | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel */                        
+//        LCD40x1C   = (LCD_T_C | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel (actually 20x2) */                        
         LCD40x2    = (LCD_T_A | LCD_T_C40 | LCD_T_R2),    /**< 40x2 LCD panel */                
         LCD40x4    = (LCD_T_E | LCD_T_C40 | LCD_T_R4)     /**< 40x4 LCD panel, Two controller version */                        
     };
@@ -446,10 +461,12 @@ public:
         PCF2119_3V3 = 10 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                          /**<  PCF2119 3V3 with Booster, 4/8 bit, I2C       */                           
 //        PCF2119_5V  = 11 | (LCD_C_PAR | LCD_C_I2C),                                                      /**<  PCF2119 5V no Booster, 4/8 bit, I2C          */
         AIP31068    = 12 | (LCD_C_SPI3_9  | LCD_C_I2C | LCD_C_BST),                                      /**<  AIP31068 I2C, SPI3                           */                           
-        SSD1803_3V3 = 13 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN)   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
-//        SSD1803_5V  = 14 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN) /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
-//        US2066_3V3  = 15 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN) /**<  US2066  3V3 with Booster, 4/8 bit, I2C, SPI3 */
-//        PT6314      = 16 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR | LCD_C_PDN)                         /**<  PT6314  VFD, 4/8 bit, SPI3                   */
+        SSD1803_3V3 = 13 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),  /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
+//        SSD1803_5V  = 14 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),  /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
+        US2066_3V3  = 15 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_CTR | LCD_C_PDN),              /**<  US2066/SSD1311 3V3, 4/8 bit, I2C, SPI3 */
+//        PT6314      = 16 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR | LCD_C_PDN),                          /**<  PT6314  VFD, 4/8 bit, SPI3                   */
+//        AC780       = 17 | (LCD_C_PAR | LCD_C_SPI4 | LCD_C_I2C | LCD_C_PDN),                             /**<  AC780  4/8 bit, SPI, I2C                     */
+//        KS0066      = 18 | (LCD_C_PAR | LCD_C_SPI4 | LCD_C_I2C | LCD_C_PDN)                              /**<  KS0066i == AC780  4/8 bit, SPI, I2C          */
     };
 
 
@@ -472,6 +489,19 @@ public:
         LightOff,        /**<  Backlight Off */    
         LightOn          /**<  Backlight On */            
     };
+
+   /** LCD Blink control (UDC), supported for some Controllers */
+    enum LCDBlink {
+        BlinkOff,        /**<  Blink Off */    
+        BlinkOn          /**<  Blink On  */            
+    };
+
+   /** LCD Orientation control, supported for some Controllers */
+    enum LCDOrient {
+        Top,             /**<  Top view */    
+        Bottom           /**<  Upside down view */            
+    };
+
 
 #if DOXYGEN_ONLY
     /** Write a character to the LCD
@@ -544,12 +574,19 @@ public:
      */
     void setBacklight(LCDBacklight backlightMode); 
 
-    /** Set User Defined Characters
+    /** Set User Defined Characters (UDC)
      *
      * @param unsigned char c   The Index of the UDC (0..7)
      * @param char *udc_data    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
      */
     void setUDC(unsigned char c, char *udc_data);
+
+    /** Set UDC Blink
+     * setUDCBlink method is supported by some compatible devices (eg SSD1803) 
+     *
+     * @param blinkMode The Blink mode (BlinkOff, BlinkOn)
+     */
+    void setUDCBlink(LCDBlink blinkMode);
 
     /** Set Contrast
      * setContrast method is supported by some compatible devices (eg ST7032i) that have onboard LCD voltage generation
@@ -560,7 +597,6 @@ public:
      */
     void setContrast(unsigned char c = LCD_DEF_CONTRAST);
 
-
     /** Set Power
      * setPower method is supported by some compatible devices (eg SSD1803) that have power down modes
      *
@@ -568,6 +604,14 @@ public:
      * @return none
      */
     void setPower(bool powerOn = true);
+
+    /** Set Orient
+     * setOrient method is supported by some compatible devices (eg SSD1803, US2066) that have top/bottom view modes
+     *
+     * @param LCDOrient orient Orientation 
+     * @return none
+     */
+    void setOrient(LCDOrient orient = Top);
 
 
 //test
@@ -626,7 +670,7 @@ protected:
   * Methods resets the RS bit and provides the required timing for the command.
   */
     void _writeCommand(int command);
-
+    
 /** Low level data byte write operation to LCD controller (serial or parallel).
   * Methods sets the RS bit and provides the required timing for the data.
   */   
@@ -656,7 +700,7 @@ protected:
   * Depending on the RS pin this byte will be interpreted as data or command
   */
     virtual void _writeByte(int value);
-    
+
 //Display type
     LCDType _type;
     int _nr_cols;    
@@ -980,9 +1024,6 @@ private:
     SPI *_spi;
     DigitalOut _cs;    
 
-//Test
-    DigitalOut _ps;    
-
    
 // controlbyte to select between data and command. Internal value for serial bus only
     char _controlbyte;   
@@ -1119,8 +1160,6 @@ private:
 #endif
 
 #if(1)
-//Code to be checked out on logic analyser. Not yet tested on hardware..
-
 //------- Start TextLCD_SPI_N_3_24 ---------
 
 /** Create a TextLCD interface using a controller with native SPI3 24 bits interface
@@ -1234,12 +1273,8 @@ private:
     char _controlbyte;   
     
 //Backlight
-    DigitalOut *_bl;    
-    
-    
-//Test
-    DigitalOut _ps;    
-    
+    DigitalOut *_bl;       
+   
 };
 
 //---------- End TextLCD_I2C_N ------------
