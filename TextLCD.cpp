@@ -12,6 +12,8 @@
  *               2014, v10: WH, Added Class for Native I2C controllers such as ST7032i, Added support for MCP23008 I2C portexpander, Added support for Adafruit module  
  *               2014, v11: WH, Added support for native I2C controllers such as PCF21XX, Improved the _initCtrl() method to deal with differences between all supported controllers  
  *               2014, v12: WH, Added support for native I2C controller PCF2119 and native I2C/SPI controllers SSD1803, ST7036, added setContrast method (by JH1PJL) for supported devices (eg ST7032i) 
+ *               2014, v13: WH, Added support for controllers US2066/SSD1311 (OLED), added setUDCBlink method for supported devices (eg SSD1803), fixed issue in setPower() 
+ *@Todo Add AC780S/KS0066i
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -40,6 +42,21 @@
 //DigitalOut led2(LED2);
 //  led2=!led2;    
 
+
+// User Defined Characters (UDCs) are defined by an 8 byte bitpattern. The P0..P5 form the character pattern.
+//     P7 P6 P5 P4 P3 P2 P1 P0 
+// 0   B1 B0  x  0  1  1  1  0
+// 1   B1 B0  x  1  0  0  0  1
+// .       .............
+// 7   B1 B0  x  1  0  0  0  1
+//
+// Blinking UDCs are enabled when a specific controlbit (BE) is set.
+// The blinking pixels in the UDC can be controlled by setting additional bits in the UDC bitpattern.
+// Bit 6 and Bit 7 in the pattern will control the blinking mode when Blink is enabled through BE. 
+//     B1 B0  Mode
+//      0  0  No Blinking in this row of the UDC
+//      0  1  Enabled pixels in P4 will blink
+//      1  x  Enabled pixels in P0..P4 will blink
 
 /** Some sample User Defined Chars 5x7 dots */
 //const char udc_ae[] = {0x00, 0x00, 0x1B, 0x05, 0x1F, 0x14, 0x1F, 0x00};  //æ
@@ -74,9 +91,12 @@ const char udc_TM_M[]   = {0x11, 0x1B, 0x15, 0x11, 0x00, 0x00, 0x00, 0x00};  // 
 //const char udc_Bat_Hi[] = {0x0E, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Full
 //const char udc_Bat_Ha[] = {0x0E, 0x11, 0x13, 0x17, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Half
 //const char udc_Bat_Lo[] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F, 0x00};  // Battery Low
-const char udc_Bat_Hi[] = {0x0E, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Full
-const char udc_Bat_Ha[] = {0x0E, 0x11, 0x11, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Half
-const char udc_Bat_Lo[] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x1F, 0x1F, 0x00};  // Battery Low
+//const char udc_Bat_Hi[] = {0x0E, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Full
+//const char udc_Bat_Ha[] = {0x0E, 0x11, 0x11, 0x1F, 0x1F, 0x1F, 0x1F, 0x00};  // Battery Half
+//const char udc_Bat_Lo[] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x1F, 0x1F, 0x00};  // Battery Low
+const char udc_Bat_Hi[] = {0x8E, 0x9F, 0x9F, 0x9F, 0x9F, 0x9F, 0x9F, 0x00};  // Battery Full, Blink
+const char udc_Bat_Ha[] = {0x8E, 0x91, 0x91, 0x9F, 0x9F, 0x9F, 0x9F, 0x00};  // Battery Half, Blink
+const char udc_Bat_Lo[] = {0x8E, 0x91, 0x91, 0x91, 0x91, 0x9F, 0x9F, 0x00};  // Battery Low, Blink
 const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // AC Power
 
 //const char udc_smiley[] = {0x00, 0x0A, 0x00, 0x04, 0x11, 0x0E, 0x00, 0x00};  // Smiley
@@ -97,6 +117,15 @@ const char udc_AC[]     = {0x0A, 0x0A, 0x1F, 0x11, 0x0E, 0x04, 0x04, 0x00};  // 
 //const char udc_ch_mo[] =  {0x0f, 0x09, 0x0f, 0x09, 0x0f, 0x09, 0x09, 0x13};  // Month  (kana)
 //const char udc_ch_dy[] =  {0x1f, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11, 0x1F};  // Day    (kana)
 //const char udc_ch_mi[] =  {0x0C, 0x0a, 0x11, 0x1f, 0x09, 0x09, 0x09, 0x13};  // minute (kana)
+
+//const char udc_bell[]     = {0x04,0x0E,0x0E,0x0E,0x1F,0x00,0x04};
+//const char udc_note[]     = {0x02,0x03,0x02,0x0E,0x1E,0x0C,0x00};
+//const char udc_clock[]    = {0x00,0x0E,0x15,0x17,0x11,0x0E,0x00};
+//const char udc_heart[]    = {0x00,0x0a,0x1F,0x1F,0x0E,0x04,0x00};
+//const char udc_duck[]     = {0x00,0x0c,0x1D,0x0F,0x0F,0x06,0x00};
+//const char udc_check[]    = {0x00,0x01,0x03,0x16,0x1C,0x08,0x00};
+//const char udc_cross[]    = {0x00,0x1B,0x0E,0x04,0x0E,0x1B,0x00};
+//const char udc_retarrow[] = {0x01,0x01,0x05,0x09,0x1f,0x08,0x04};
 
 const char udc_None[]    =  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; 
 const char udc_All[]     =  {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; 
@@ -150,22 +179,38 @@ void TextLCD_Base::_init() {
 void TextLCD_Base::_initCtrl() {
   int _bias_lines=0; // Set Bias and lines (Instr Set 1), temporary variable.
   int _lines=0;      // Set lines (Ext Instr Set), temporary variable.
-//  int _function_x=0; // Set ext. function (Ext Instr Set), temporary variable.
       
     this->_setRS(false); // command mode
     
     wait_ms(20);         // Wait 20ms to ensure powered up
 
-    // send "Display Settings" 3 times (Only top nibble of 0x30 as we've got 4-bit bus)    
-    for (int i=0; i<3; i++) {
-        _writeNibble(0x3);
-        wait_ms(15);     // This command takes 1.64ms, so wait for it 
-    }
-    _writeNibble(0x2);   // 4-bit mode
+    // The Controller could be in 8 bit mode (power-on reset) or in 4 bit mode (warm reboot) at this point.
+    // Follow this procedure to make sure the Controller enters the correct state. The hardware interface
+    // between the uP and the LCD can only write the 4 most significant bits (Most Significant Nibble, MSN).
+    // In 4 bit mode the LCD expects the MSN first, followed by the LSN.
+    //
+    //    Current state:               8 bit mode                |  4 bit mode, MSN is next      | 4 bit mode, LSN is next          
+                         //-------------------------------------------------------------------------------------------------                          
+    _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, |   set 8 bit mode (MSN),       |    set dummy LSN, 
+                         //  remains in 8 bit mode               |    change to 8 bit mode       |  remains in 4 bit mode
+    wait_ms(15);         //                           
+    
+    _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set 8bit mode (MSN), 
+                         //  remains in 8 bit mode               |   remains in 8 bit mode       |  remains in 4 bit mode
+    wait_ms(15);         // 
+    
+    _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set dummy LSN, 
+                         //  remains in 8 bit mode               |   remains in 8 bit mode       |  change to 8 bit mode
+    wait_ms(15);         // 
+
+    // Controller is now in 8 bit mode
+
+    _writeNibble(0x2);   // Change to 4-bit mode (MSN), the LSN is undefined dummy
     wait_us(40);         // most instructions take 40us
 
     // Display is now in 4-bit mode
-    // Note: 4 bit mode is ignored for native SPI and I2C devices
+    // Note: 4/8 bit mode is ignored for most native SPI and I2C devices. They dont use the parallel bus.
+    //       However, _writeNibble() method is void anyway for native SPI and I2C devices.
    
     // Device specific initialisations: DC/DC converter to generate VLCD or VLED, number of lines etc
     switch (_ctrl) {
@@ -186,7 +231,7 @@ void TextLCD_Base::_initCtrl() {
                                     //   DH=1  (Disp shift enable, special mode for KS0078)                                
                                     //   REV=0 (Reverse normal, special mode for KS0078)
                                     
-              _function_1 = 0x04;    // Function set 001 DL N RE(1) BE 0 (Ext Regs)
+              _function_1 = 0x04;   // Function set 001 DL N RE(1) BE 0 (Ext Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=0  (1 line mode), N=1 (2 line mode)
                                     //   RE=1  (Ena Extended Regs, special mode for KS0078)
@@ -212,7 +257,7 @@ void TextLCD_Base::_initCtrl() {
                                     //   DH=1  (Disp shift enable, special mode for KS0078)                                
                                     //   REV=0 (Reverse normal, special mode for KS0078)
                                     
-              _function_1 = 0x04;    // Function set 001 DL N RE(1) BE 0 (Ext Regs)
+              _function_1 = 0x04;   // Function set 001 DL N RE(1) BE 0 (Ext Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=0  (1 line mode), N=1 (2 line mode)
                                     //   RE=1  (Ena Extended Regs, special mode for KS0078)
@@ -222,6 +267,10 @@ void TextLCD_Base::_initCtrl() {
               _function_x = 0x01;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
                                     //    NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0078)                                
               break;                                
+
+            case LCD16x3G:            // Special mode for ST7036                        
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
               
             default:
               // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)            
@@ -232,7 +281,7 @@ void TextLCD_Base::_initCtrl() {
                                     //   DH=1  (Disp shift enable, special mode for KS0078)                                
                                     //   REV=0 (Reverse normal, special mode for KS0078)
                                     
-              _function_1 = 0x0C;    // Function set 001 DL N RE(1) BE 0 (Ext Regs)
+              _function_1 = 0x0C;   // Function set 001 DL N RE(1) BE 0 (Ext Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=1  (1 line mode), N=1 (2 line mode)
                                     //   RE=1  (Ena Extended Regs, special mode for KS0078)
@@ -292,6 +341,7 @@ void TextLCD_Base::_initCtrl() {
             case LCD12x3D:            // Special mode for KS0078 and PCF21XX
             case LCD12x3D1:           // Special mode for KS0078 and PCF21XX
             case LCD12x4D:            // Special mode for KS0078 and PCF21XX
+            case LCD16x3G:            // Special mode for ST7036                        
             case LCD24x4D:            // Special mode for KS0078
               error("Error: LCD Controller type does not support this Display type\n\r"); 
               break;  
@@ -305,9 +355,9 @@ void TextLCD_Base::_initCtrl() {
           } // switch type    
                                      
           // init special features 
-          _writeCommand(0x20 | _function | 0x01);           // Set function,  0 0 1 DL N F 0 IS=1 Select Instruction Set = 1              
+          _writeCommand(0x20 | _function | 0x01);           // Set function,  0 0 1 DL N F 0 IS=1 Select Instr Set = 1              
 
-          _writeCommand(0x1C);                              // Internal OSC frequency adjustment Framefreq=183HZ, Bias will be 1/4 (IS=1)
+          _writeCommand(0x1C);                              // Internal OSC frequency adjustment Framefreq=183HZ, Bias will be 1/4 (Instr Set=1)
 
           _contrast = LCD_ST7032_CONTRAST;              
           _writeCommand(0x70 | (_contrast & 0x0F));         // Set Contrast Low bits, 0 1 1 1 C3 C2 C1 C0 (IS=1)
@@ -381,7 +431,7 @@ void TextLCD_Base::_initCtrl() {
 
 
           // init special features 
-          _writeCommand(0x20 | _function | 0x01);   // Set function, IS2,IS1 = 01 (Select Instruction Set = 1)
+          _writeCommand(0x20 | _function | 0x01);   // Set function, IS2,IS1 = 01 (Select Instr Set = 1)
           _writeCommand(0x10 | _bias_lines);        // Set Bias and 1,2 or 3 lines (Instr Set 1)
 
           _contrast = LCD_ST7036_CONTRAST;
@@ -427,7 +477,7 @@ void TextLCD_Base::_initCtrl() {
                                     //    DH=0 Double Height disable 
                                     //    IS=0
           
-             _function_1 = 0x00;     // Set function, 0 0 1 DL N BE RE(1) REV
+              _function_1 = 0x02;   // Set function, 0 0 1 DL N BE RE(1) REV
                                     //  Saved to allow switch between Instruction sets at later time
                                     //    DL=0 4-bit Databus,
                                     //         Note: 4 bit mode is ignored for native SPI and I2C devices
@@ -439,9 +489,9 @@ void TextLCD_Base::_initCtrl() {
                                     //    NW=0 1-Line LCD (N=0)
               break;  
 
-            case LCD12x3D:          // Special mode for KS0078, ST7036 and PCF21XX                                  
+            case LCD12x3D:          // Special mode for KS0078 and PCF21XX                                  
 //            case LCD12x3D1:           // Special mode for KS0078 and PCF21XX            
-            case LCD16x3D:          // Special mode for KS0078 and ST7036
+            case LCD16x3D:          // Special mode for KS0078
 //            case LCD16x3D1:           // Special mode for SSD1803
 //            case LCD20x3D:            // Special mode for SSD1803
               _function = 0x00;     //  Set function 0 0 1 DL N DH RE(0) IS 
@@ -452,7 +502,7 @@ void TextLCD_Base::_initCtrl() {
                                     //    DH=0 Double Height disable 
                                     //    IS=0
           
-             _function_1 = 0x00;     // Set function, 0 0 1 DL N BE RE(1) REV
+              _function_1 = 0x02;   // Set function, 0 0 1 DL N BE RE(1) REV
                                     //  Saved to allow switch between Instruction sets at later time
                                     //    DL=0 4-bit Databus,
                                     //         Note: 4 bit mode is ignored for native SPI and I2C devices
@@ -473,7 +523,7 @@ void TextLCD_Base::_initCtrl() {
                                     //    DH=0 Double Height disable 
                                     //    IS=0
           
-             _function_1 = 0x08;     // Set function, 0 0 1 DL N BE RE(1) REV
+              _function_1 = 0x0A;   // Set function, 0 0 1 DL N BE RE(1) REV
                                     //  Saved to allow switch between Instruction sets at later time
                                     //    DL=0 4-bit Databus,
                                     //         Note: 4 bit mode is ignored for native SPI and I2C devices
@@ -485,6 +535,7 @@ void TextLCD_Base::_initCtrl() {
                                     //    NW=1 4-Line LCD (N=1)
               break;  
 
+            case LCD16x3G:          // Special mode for ST7036            
             case LCD24x4D:          // Special mode for KS0078
               error("Error: LCD Controller type does not support this Display type\n\r"); 
               break;  
@@ -499,7 +550,7 @@ void TextLCD_Base::_initCtrl() {
                                     //    DH=0 Double Height disable 
                                     //    IS=0
           
-             _function_1 = 0x08;     // Set function, 0 0 1 DL N BE RE(1) REV
+              _function_1 = 0x0A;   // Set function, 0 0 1 DL N BE RE(1) REV
                                     //  Saved to allow switch between Instruction sets at later time
                                     //    DL=0 4-bit Databus,
                                     //         Note: 4 bit mode is ignored for native SPI and I2C devices
@@ -514,15 +565,16 @@ void TextLCD_Base::_initCtrl() {
 
 
           // init special features 
-          _writeCommand(0x20 | _function_1 | 0x02);  // Set function, 0 0 1 DL N BE RE(1) REV 
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
                                                     // Select Extended Instruction Set
-
-          _writeCommand(0x10);                      // Double Height and Bias, 0 0 0 1 UD2=0, UD1=0, BS1=0 Bias 1/5, DH=0 (Ext Instr Set)
-
+          
+          _writeCommand(0x06);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=1 COM1-32, BDS=0 SEG100-1    "Bottom View" (Ext Instr Set)
+//          _writeCommand(0x05);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=0 COM32-1, BDS=1 SEG1-100    "Top View" (Ext Instr Set)          
+          wait_ms(5);                               // Wait to ensure completion or SSD1803 fails to set Top/Bottom after reset..
+         
           _writeCommand(0x08 | _lines);             // Set ext function 0 0 0 0 1 FW BW NW 1,2,3 or 4 lines (Ext Instr Set)
 
-          _writeCommand(0x06);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=1 COM1-31, BDS=0 SEG100-1 "Bottom View" (Ext Instr Set)
-//          _writeCommand(0x04);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=0 COM31-1, BDS=0 SEG100-1 "Top View" (Ext Instr Set)          
+          _writeCommand(0x10);                      // Double Height and Bias, 0 0 0 1 UD2=0, UD1=0, BS1=0 Bias 1/5, DH=0 (Ext Instr Set)
 
 //          _writeCommand(0x76);                      // Set TC Control, 0 1 1 1 0 1 1 0 (Ext Instr Set)
 //          _writeData(0x02);                         // Set TC data,    0 0 0 0 0 TC2,TC1,TC0 = 0 1 0 (Ext Instr Set)
@@ -541,7 +593,7 @@ void TextLCD_Base::_initCtrl() {
           _writeCommand(0x68 | (LCD_SSD1_RAB & 0x07));  // Set Voltagefollower 0 1 1 0 Don = 1, Ampl ratio Rab2, Rab1, Rab0 = 1 1 0  (Instr Set 1)
           wait_ms(10);            // Wait 10ms to ensure powered up
 
-          _writeCommand(0x20 | _function_1 | 0x02); // Set function, 0 0 1 DL N BE RE(1) REV 
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
                                                     // Select Extended Instruction Set 1
           _writeCommand(0x10);                      // Shift/Scroll enable, 0 0 0 1 DS4/HS4 DS3/HS3 DS2/HS2 DS1/HS1  (Ext Instr Set 1)
 
@@ -570,16 +622,16 @@ void TextLCD_Base::_initCtrl() {
           // Initialise Display configuration
           switch (_type) {
 //            case LCD12x1:                                
-//              _function = 0x02;       // FUNCTION SET DL=0 4 bit, 0, M=0 1-line/12 chars display mode, SL=1
+//              _function = 0x02;       // FUNCTION SET 0 0 1 DL=0 4 bit, 0, M=0 1-line/12 chars display mode, SL=1, IS=0
                                       // Note: 4 bit mode is ignored for I2C mode
             case LCD24x1:                    
-              _function = 0x00;       // FUNCTION SET DL=0 4 bit, 0, M=0 1-line/24 chars display mode, SL=0            
+              _function = 0x00;       // FUNCTION SET 0 0 1 DL=0 4 bit, 0, M=0 1-line/24 chars display mode, SL=0, IS=0            
                                       // Note: 4 bit mode is ignored for I2C mode
               break;  
 
 //Tested OK for PCF2113
             case LCD12x2:                    
-              _function = 0x04;       // FUNCTION SET DL=0 4 bit, 0, M=1 2-line/12 chars display mode, SL=0            
+              _function = 0x04;       // FUNCTION SET 0 0 1 DL=0 4 bit, 0, M=1 2-line/12 chars display mode, SL=0, IS=0            
               break;  
              
             default:
@@ -589,22 +641,22 @@ void TextLCD_Base::_initCtrl() {
           } // switch type    
 
           // Init special features
-          _writeCommand(0x20 | _function | 0x01);           // Set function, Select Instruction Set = 1              
+          _writeCommand(0x20 | _function | 0x01);          // Set function, Select Instr Set = 1              
 
-          _writeCommand(0x04);    // DISP CONF SET (Instr. Set 1)   0000 0, 1, P=0, Q=0 
-          _writeCommand(0x10);    // TEMP CTRL SET (Instr. Set 1)   0001 0, 0, TC1=0, TC2=0
-//          _writeCommand(0x42);    // HV GEN (Instr. Set 1)          0100 S1=1, S2=0 (2x multiplier)
-          _writeCommand(0x40 | (LCD_PCF2_S12 & 0x03));    // HV GEN (Instr. Set 1)          0100 S1=1, S2=0 (2x multiplier)
+          _writeCommand(0x04);                             // Display Conf Set         0000 0, 1, P=0, Q=0               (Instr. Set 1)
+          _writeCommand(0x10);                             // Temp Compensation Set    0001 0, 0, TC1=0, TC2=0           (Instr. Set 1)
+//          _writeCommand(0x42);                             // HV GEN                   0100 S1=1, S2=0 (2x multiplier)   (Instr. Set 1)
+          _writeCommand(0x40 | (LCD_PCF2_S12 & 0x03));     // HV Gen                   0100 S1=1, S2=0 (2x multiplier)   (Instr. Set 1)
           
           _contrast = LCD_PCF2_CONTRAST;              
-          _writeCommand(0x80 | 0x00 | (_contrast & 0x3F));      // VLCD_set (Instr. Set 1)    V=0, VA=contrast
-          _writeCommand(0x80 | 0x40 | (_contrast & 0x3F));      // VLCD_set (Instr. Set 1)    V=1, VB=contrast
+          _writeCommand(0x80 | 0x00 | (_contrast & 0x3F));      // VLCD_set (Instr. Set 1)  1, V=0, VA=contrast
+          _writeCommand(0x80 | 0x40 | (_contrast & 0x3F));      // VLCD_set (Instr. Set 1)  1, V=1, VB=contrast
           wait_ms(10);            // Wait 10ms to ensure powered up
           
-          _writeCommand(0x02);    // SCRN CONF (Instr. Set 1)    L=0
-          _writeCommand(0x08);    // ICON CONF (Instr. Set 1)    IM=0 (Char mode) IB=0 (no icon blink) DM=0 (no direct mode)
+          _writeCommand(0x02);                             // Screen Config            0000 001, L=0  (Instr. Set 1)
+          _writeCommand(0x08);                             // ICON Conf                0000 1, IM=0 (Char mode), IB=0 (no icon blink) DM=0 (no direct mode) (Instr. Set 1) 
 
-          _writeCommand(0x20 | _function);                  // Select Instruction Set = 0             
+          _writeCommand(0x20 | _function);                 // Set function, Select Instr Set = 0             
 
           break; // case PCF2113_3V3 Controller
 
@@ -783,6 +835,7 @@ void TextLCD_Base::_initCtrl() {
             case LCD12x3D:            // Special mode for KS0078 and PCF21XX                            
             case LCD12x3D1:           // Special mode for PCF21XX                     
             case LCD12x4D:            // Special mode for PCF21XX:
+            case LCD16x3G:            // Special mode for ST7036            
             case LCD24x4D:            // Special mode for KS0078
               error("Error: LCD Controller type does not support this Display type\n\r"); 
               break;  
@@ -799,6 +852,179 @@ void TextLCD_Base::_initCtrl() {
            } // switch type
            
            break; // case WS0010 Controller
+
+
+      case US2066_3V3:
+          // US2066/SSD1311 OLED controller, Initialise for VDD=3V3
+          // Note: supports 1,2, 3 or 4 lines
+//      case USS2066_5V:
+          // US2066 controller, VDD=5V
+                    
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2D is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:   
+//            case LCD20x1:                                                                         
+              _function = 0x00;     //  Set function 0 0 1 X N DH RE(0) IS 
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead
+                                    //     N=0 1 Line / 3 Line
+                                    //    DH=0 Double Height disable 
+                                    //    IS=0
+          
+              _function_1 = 0x02;   // Set function, 0 0 1 X N BE RE(1) REV
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead                                    
+                                    //     N=0 1 Line / 3 Line
+                                    //    BE=0 Blink Enable off, special feature of SSD1803, US2066
+                                    //   REV=0 Reverse off, special feature of SSD1803, US2066            
+                        
+              _lines = 0x00;        // Ext function set 0 0 0 0 1 FW BW NW 
+                                    //    NW=0 1-Line LCD (N=0)
+              break;  
+
+            case LCD16x1C:
+            case LCD8x2:
+            case LCD16x2:
+            case LCD20x2:            
+              _function = 0x08;     //  Set function 0 0 1 X N DH RE(0) IS 
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead                                                                        
+                                    //     N=1 2 line / 4 Line
+                                    //    DH=0 Double Height disable 
+                                    //    IS=0
+          
+              _function_1 = 0x0A;   // Set function, 0 0 1 X N BE RE(1) REV
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead                                                                        
+                                    //     N=1 2 line / 4 Line
+                                    //    BE=0 Blink Enable off, special feature of SSD1803, US2066
+                                    //   REV=0 Reverse off, special feature of SSD1803, US2066            
+                        
+              _lines = 0x00;        // Ext function set 0 0 0 0 1 FW BW NW 
+                                    //    NW=0 2-Line LCD (N=1)
+              break;                
+
+            case LCD12x3D:          // Special mode for KS0078 and PCF21XX 
+//            case LCD12x3D1:           // Special mode for KS0078 and PCF21XX            
+            case LCD16x3D:          // Special mode for KS0078, SSD1803 and US2066
+//            case LCD16x3D1:           // Special mode for SSD1803, US2066
+//            case LCD20x3D:            // Special mode for SSD1803, US2066
+              _function = 0x00;     //  Set function 0 0 1 X N DH RE(0) IS 
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead                                    
+                                    //     N=0 1 Line / 3 Line
+                                    //    DH=0 Double Height disable 
+                                    //    IS=0
+          
+              _function_1 = 0x02;   // Set function, 0 0 1 X N BE RE(1) REV
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead                                    
+                                    //     N=0 1 Line / 3 Line
+                                    //    BE=0 Blink Enable off, special feature of SSD1803, US2066
+                                    //   REV=0 Reverse off, special feature of SSD1803, US2066            
+                        
+              _lines = 0x00;        // Ext function set 0 0 0 0 1 FW BW NW 
+                                    //    NW=1 3-Line LCD (N=0)
+              break;  
+
+            case LCD20x4D:          // Special mode for SSD1803, US2066
+              _function = 0x08;     //  Set function 0 0 1 X N DH RE(0) IS 
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=X bit is ignored for US2066. Uses hardwired pins instead
+                                    //     N=1 2 line / 4 Line
+                                    //    DH=0 Double Height disable 
+                                    //    IS=0
+          
+              _function_1 = 0x0A;   // Set function, 0 0 1 DL N BE RE(1) REV
+                                    //  Saved to allow switch between Instruction sets at later time
+                                    //    DL=0 bit is ignored for US2066. Uses hardwired pins instead                                    
+                                    //     N=1 2 line / 4 Line
+                                    //    BE=0 Blink Enable off, special feature of SSD1803, US2066
+                                    //   REV=0 Reverse off, special feature of SSD1803, US2066            
+                        
+              _lines = 0x01;        // Ext function set 0 0 0 0 1 FW BW NW 
+                                    //    NW=1 4-Line LCD (N=1)
+              break;  
+
+//            case LCD24x1:                                                                         
+//            case LCD16x3G:          // Special mode for ST7036            
+//            case LCD24x4D:          // Special mode for KS0078
+            default:            
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+
+          } // switch type
+
+
+          // init special features 
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 X N BE RE(1) REV 
+                                                    // Select Extended Instruction Set
+
+          _writeCommand(0x71);                      // Function Select A: 0 1 1 1 0 0 0 1 (Ext Instr Set)
+          _writeData(0x00);                         // Disable Internal VDD
+
+          _writeCommand(0x79);                      // Function Select OLED:  0 1 1 1 1 0 0 1 (Ext Instr Set)
+
+          _writeCommand(0xD5);                      // Display Clock Divide Ratio: 1 1 0 1 0 1 0 1 (Ext Instr Set, OLED Instr Set)
+          _writeCommand(0x70);                      // Display Clock Divide Ratio value: 0 1 1 1 0 0 0 0 (Ext Instr Set, OLED Instr Set)
+                    
+          _writeCommand(0x78);                      // Function Disable OLED: 0 1 1 1 1 0 0 0 (Ext Instr Set)
+          
+//          _writeCommand(0x06);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=1 COM1-32, BDS=0 SEG100-1    "Bottom View" (Ext Instr Set)
+          _writeCommand(0x05);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=0 COM32-1, BDS=1 SEG1-100    "Top View" (Ext Instr Set)          
+         
+          _writeCommand(0x08 | _lines);             // Set ext function 0 0 0 0 1 FW BW NW 1,2,3 or 4 lines (Ext Instr Set)
+
+//          _writeCommand(0x1C);                      // Double Height and Bias, 0 0 0 1 UD2=1, UD1=1, X, DH=0 (Ext Instr Set)
+//                                                    // Default
+
+          _writeCommand(0x72);                      // Function Select B: 0 1 1 1 0 0 1 0 (Ext Instr Set)
+          _writeData(0x01);                         // Select ROM A (CGRAM 8, CGROM 248)
+
+          _writeCommand(0x79);                      // Function Select OLED:  0 1 1 1 1 0 0 1 (Ext Instr Set)
+
+          _writeCommand(0xDA);                      // Set Segm Pins Config:  1 1 0 1 1 0 1 0 (Ext Instr Set, OLED)
+          _writeCommand(0x10);                      // Set Segm Pins Config value: Altern Odd/Even, Disable Remap (Ext Instr Set, OLED)
+
+          _writeCommand(0xDC);                      // Function Select C: 1 1 0 1 1 1 0 0 (Ext Instr Set, OLED)
+//          _writeCommand(0x00);                      // Set internal VSL, GPIO pin HiZ (always read low)
+          _writeCommand(0x80);                      // Set external VSL, GPIO pin HiZ (always read low)
+
+          _contrast = LCD_US20_CONTRAST;
+          _writeCommand(0x81);                      // Set Contrast Control: 1 0 0 0 0 0 0 1 (Ext Instr Set, OLED)
+          _writeCommand((_contrast << 2) | 0x03);   // Set Contrast Value: 8 bits, use 6 bits for compatibility 
+
+          _writeCommand(0xD9);                      // Set Phase Length: 1 1 0 1 1 0 0 1 (Ext Instr Set, OLED)
+          _writeCommand(0xF1);                      // Set Phase Length Value: 
+
+          _writeCommand(0xDB);                      // Set VCOMH Deselect Lvl: 1 1 0 1 1 0 1 1 (Ext Instr Set, OLED)
+          _writeCommand(0x30);                      // Set VCOMH Deselect Value: 0.83 x VCC
+
+          wait_ms(10);            // Wait 10ms to ensure powered up
+
+//Test Fade/Blinking. Hard Blink on/off, No fade in/out ??
+//          _writeCommand(0x23);                      // Set (Ext Instr Set, OLED)
+//          _writeCommand(0x3F);                      // Set interval 128 frames
+//End Test Blinking
+
+          _writeCommand(0x78);                      // Function Disable OLED: 0 1 1 1 1 0 0 0 (Ext Instr Set)
+          
+          _writeCommand(0x20 | _function | 0x01);   // Set function, 0 0 1 X N DH RE(0) IS=1 Select Instruction Set 1
+                                                    // Select Std Instr set, Select IS=1  
+
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 X N BE RE(1) REV 
+                                                    // Select Ext Instr Set, IS=1
+          _writeCommand(0x10);                      // Shift/Scroll enable, 0 0 0 1 DS4/HS4 DS3/HS3 DS2/HS2 DS1/HS1  (Ext Instr Set, IS=1)
+
+
+          _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
+                                                    // Select Std Instr set, Select IS=0
+         
+          break; // case US2066/SSD1311 Controller
+
            
         default:
           // Devices fully compatible to HD44780 that do not use any DC/DC Voltage converters but external VLCD, no icons etc
@@ -822,7 +1048,7 @@ void TextLCD_Base::_initCtrl() {
             case LCD12x3D:            // Special mode for KS0078 and PCF21XX                            
             case LCD12x3D1:           // Special mode for KS0078 and PCF21XX                     
             case LCD12x4D:            // Special mode for KS0078 and PCF21XX:
-            case LCD16x3D:            // Special mode for KS0078 and ST7036
+            case LCD16x3D:            // Special mode for KS0078
 //            case LCD16x3D1:           // Special mode for KS0078
 //            case LCD24x3D:            // Special mode for KS0078
 //            case LCD24x3D1:           // Special mode for KS0078            
@@ -1067,7 +1293,9 @@ int TextLCD_Base::getAddress(int column, int row) {
 
         case LCD_T_C:
           // LCD16x1C is a special layout of LCD8x2
-#if(1)
+          // LCD32x1C is a special layout of LCD16x2                    
+          // LCD40x1C is a special layout of LCD20x2          
+#if(0)
           if (column < 8) 
             return 0x00 + column;                        
           else   
@@ -1083,10 +1311,9 @@ int TextLCD_Base::getAddress(int column, int row) {
 // Left in for compatibility with original library
 //        case LCD16x2B:      
 //            return 0x00 + (row * 40) + column;
-  
 
         case LCD_T_D:
-          //Alternate addressing mode for 3 and 4 row displays (except 40x4). Used by PCF21XX, KS0078, ST7036, SSD1803
+          //Alternate addressing mode for 3 and 4 row displays (except 40x4). Used by PCF21XX, KS0078, SSD1803
           //The 4 available rows start at a hardcoded address.                    
           //Displays top rows when less than four are used.
           switch (row) {
@@ -1385,6 +1612,89 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
 }
 
 
+/** Set UDC Blink
+  * setUDCBlink method is supported by some compatible devices (eg SSD1803) 
+  *
+  * @param blinkMode The Blink mode (BlinkOff, BlinkOn)
+  */
+void TextLCD_Base::setUDCBlink(LCDBlink blinkMode){
+  // Blinking UDCs are enabled when a specific controlbit (BE) is set.
+  // The blinking pixels in the UDC can be controlled by setting additional bits in the UDC bitpattern.
+  // UDCs are defined by an 8 byte bitpattern. The P0..P5 form the character pattern.
+  //     P7 P6 P5 P4 P3 P2 P1 P0 
+  // 0   B1 B0  x  0  1  1  1  0
+  // 1   B1 B0  x  1  0  0  0  1
+  //        .............
+  // 7   B1 B0  x  1  0  0  0  1
+  //
+  // Bit 6 and Bit 7 in the pattern will control the blinking mode when Blink is enabled through BE. 
+  //     B1 B0  Mode
+  //      0  0  No Blinking in this row of the UDC
+  //      0  1  Enabled pixels in P4 will blink
+  //      1  x  Enabled pixels in P0..P4 will blink
+
+  switch (blinkMode) {
+    case BlinkOn: 
+      // Controllers that support UDC Blink  
+      switch (_ctrl) {
+        case KS0078 :            
+          _function_1 |= 0x02; // Enable UDC Blink        
+          _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0 (Ext Regs)
+
+          _writeCommand(0x20 | _function);          // Function set 0 0 1 DL N RE(0) DH REV (Std Regs)
+          break; // case KS0078 Controller
+    
+        case US2066_3V3 :  
+        case SSD1803_3V3 :  
+          _function_1 |= 0x04; // Enable UDC Blink
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
+                                                    // Select Ext Instr Set
+
+          _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
+                                                    // Select Std Instr set, Select IS=0
+          break; // case SSD1803, US2066
+       
+        default:
+          //Unsupported feature for other controllers        
+          break; 
+      } //switch _ctrl     
+    
+      break;      
+
+    case BlinkOff:
+      // Controllers that support UDC Blink  
+      switch (_ctrl) {
+        case KS0078 :            
+          _function_1 &= ~0x02; // Disable UDC Blink        
+          _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0 (Ext Regs)
+
+          _writeCommand(0x20 | _function);          // Function set 0 0 1 DL N RE(0) DH REV (Std Regs)
+          break; // case KS0078 Controller
+    
+        case US2066_3V3 :  
+        case SSD1803_3V3 :  
+          _function_1 &= ~0x04; // Disable UDC Blink
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
+                                                    // Select Ext Instr Set
+
+          _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
+                                                    // Select Std Instr set, Select IS=0
+          break; // case SSD1803, US2066          
+       
+        default:
+          //Unsupported feature for other controllers        
+          break; 
+      } //switch _ctrl     
+    
+      break;        
+      
+    default:
+      break;      
+  } // blinkMode
+  
+} // setUDCBlink()
+
+
 /** Set Contrast
   * setContrast method is supported by some compatible devices (eg ST7032i) that have onboard LCD voltage generation
   * Initial code for ST70XX imported from fork by JH1PJL
@@ -1400,8 +1710,7 @@ void TextLCD_Base::setContrast(unsigned char c) {
  
   _contrast = c & 0x3F; // Sanity check
   
-  switch (_ctrl) {
-    
+  switch (_ctrl) {   
     case PCF2113_3V3 :  
     case PCF2119_3V3 :  
        if (_contrast <  5) _contrast = 0;  // See datasheet. Sanity check for PCF2113/PCF2119
@@ -1424,6 +1733,21 @@ void TextLCD_Base::setContrast(unsigned char c) {
       _writeCommand(0x20 | _function);                               // Select Instruction Set = 0
       break;
 
+    case US2066_3V3 :      
+      _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
+                                                // Select Extended Instruction Set
+
+      _writeCommand(0x79);                      // Function Select OLED:  0 1 1 1 1 0 0 1 (Ext Instr Set)
+         
+      _writeCommand(0x81);                      // Set Contrast Control: 1 0 0 0 0 0 0 1 (Ext Instr Set, OLED)
+      _writeCommand((_contrast << 2) | 0x03);   // Set Contrast Value: 8 bits. Use 6 bits for compatibility    
+      
+      _writeCommand(0x78);                      // Function Disable OLED: 0 1 1 1 1 0 0 0 (Ext Instr Set)          
+
+      _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
+                                                // Select Std Instr set, Select IS=0
+      break;
+
  #if(0)
  //not yet tested
     case PT6314 :
@@ -1438,11 +1762,9 @@ void TextLCD_Base::setContrast(unsigned char c) {
             
     default:  
       //Unsupported feature for other controllers
-      break;
-                
-  } // end switch  
-    
-}
+      break;               
+  } // end switch     
+} // end setContrast()
 
 
 /** Set Power
@@ -1453,15 +1775,10 @@ void TextLCD_Base::setContrast(unsigned char c) {
   */
 //@TODO Add support for 40x4 dual controller  
 void TextLCD_Base::setPower(bool powerOn) {
-  static int _tmp_contrast = LCD_DEF_CONTRAST;
   
   if (powerOn) {
     // Switch on  
     setMode(DispOn);       
-
-    // Try to set contrast=0
-    _tmp_contrast = _contrast;   // Temp. save current contrast         
-    setContrast(0);              // Contrast 0  
 
     // Controllers that supports specific Power Down mode
     switch (_ctrl) {
@@ -1469,18 +1786,20 @@ void TextLCD_Base::setPower(bool powerOn) {
 //    case PCF2113_3V3 :  
 //    case PCF2119_3V3 :  
 //    case ST7032_3V3 :  
-//    case ST7032_5V :      
 //@todo
+//    enable Booster Bon
 
-      case SSD1803_3V3 :      
-//      case SSD1803_5V :            
-        _writeCommand(0x20 | _function_1 | 0x02);                      // Select Ext Instr Set
-        _writeCommand(0x03);                                           // Power Down
-        _writeCommand(0x20 | _function);                               // Select Std Instr Set
+      case WS0010:      
+        _writeCommand(0x17);   // Char mode, DC/DC on        
+        wait_ms(10);           // Wait 10ms to ensure powered up             
         break;
 
-      case KS0078:
-//@todo
+      case KS0078:        
+      case SSD1803_3V3 :      
+//      case SSD1803_5V :            
+        _writeCommand(0x20 | _function_1);                             // Select Ext Instr Set
+        _writeCommand(0x02);                                           // Power On
+        _writeCommand(0x20 | _function);                               // Select Std Instr Set
         break;
                     
       default:  
@@ -1492,37 +1811,91 @@ void TextLCD_Base::setPower(bool powerOn) {
     // Switch off        
     setMode(DispOff);       
 
-    // Try to restore contrast
-    setContrast(_tmp_contrast);  // Contrast
-
     // Controllers that support specific Power Down mode
     switch (_ctrl) {
     
 //    case PCF2113_3V3 :  
 //    case PCF2119_3V3 :  
 //    case ST7032_3V3 :  
-//    case ST7032_5V :      
 //@todo
+//    disable Booster Bon
 
+      case WS0010:      
+        _writeCommand(0x13);   // Char mode, DC/DC off              
+        break;
+        
+      case KS0078:
       case SSD1803_3V3 :      
 //      case SSD1803_5V :            
-        _writeCommand(0x20 | _function_1 | 0x02);                      // Select Ext Instr Set
-        _writeCommand(0x02);                                           // Power On
+        _writeCommand(0x20 | _function_1);                             // Select Ext Instr Set
+        _writeCommand(0x03);                                           // Power Down
         _writeCommand(0x20 | _function);                               // Select Std Instr Set
         break;
 
-      case KS0078:
-//@todo
-        break;
-            
       default:  
         //Unsupported feature for other controllers
         break;              
     } // end switch  
-
   }
+} // end setPower()
 
-}
+
+/** Set Orient
+  * setOrient method is supported by some compatible devices (eg SSD1803, US2066) that have top/bottom view modes
+  *
+  * @param LCDOrient orient Orientation 
+  * @return none
+  */
+void TextLCD_Base::setOrient(LCDOrient orient){
+
+  switch (orient) {
+       
+    case Top:
+      switch (_ctrl) {
+        case SSD1803_3V3 :      
+//      case SSD1803_5V :
+        case US2066_3V3 :      
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 X N BE RE(1) REV 
+                                                    // Select Extended Instruction Set
+//          _writeCommand(0x06);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=1 COM1-32, BDS=0 SEG100-1    "Bottom View" (Ext Instr Set)
+          _writeCommand(0x05);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=0 COM32-1, BDS=1 SEG1-100    "Top View" (Ext Instr Set)          
+
+          _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
+                                                    // Select Std Instr set, Select IS=0       
+          break;
+          
+        default:  
+          //Unsupported feature for other controllers
+          break;              
+
+      } // end switch _ctrl     
+      break; // end Top
+                
+    case Bottom:
+      switch (_ctrl) {
+        case SSD1803_3V3 :      
+//      case SSD1803_5V :
+        case US2066_3V3 :      
+          _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 X N BE RE(1) REV 
+                                                    // Select Extended Instruction Set
+          _writeCommand(0x06);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=1 COM1-32, BDS=0 SEG100-1    "Bottom View" (Ext Instr Set)
+//          _writeCommand(0x05);                      // Set ext entry mode, 0 0 0 0 0 1 BDC=0 COM32-1, BDS=1 SEG1-100    "Top View" (Ext Instr Set)          
+
+          _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
+                                                    // Select Std Instr set, Select IS=0       
+          break;
+          
+        default:  
+          //Unsupported feature for other controllers
+          break;              
+
+      } // end switch _ctrl     
+    
+      break; // end Bottom
+  } // end switch orient
+} // end setOrient()
+
+
 
 //--------- End TextLCD_Base -----------
 
@@ -1631,7 +2004,6 @@ void TextLCD::_setBL(bool value) {
   else { 
     if (_bl != NULL) {_bl->write(0);}  //Reset BL bit  
   }  
-
 }    
 
 // Place the 4bit data on the databus
@@ -1756,6 +2128,10 @@ void TextLCD_I2C::_setRS(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_I2C::_setBL(bool value) {
 
+#if (DFROBOT==1)  
+  value = !value; // The DFRobot module uses PNP transistor to drive the Backlight. Reverse logic level.
+#endif
+  
   if (value) {
     _lcd_bus |= D_LCD_BL;    // Set BL bit 
   }  
@@ -1850,14 +2226,7 @@ void TextLCD_I2C::_write_register (int reg, int value) {
 TextLCD_I2C_N::TextLCD_I2C_N(I2C *i2c, char deviceAddress, LCDType type, PinName bl, LCDCtrl ctrl) : 
                                TextLCD_Base(type, ctrl), 
 
-//                               _i2c(i2c){
-                                 _i2c(i2c), _ps(p20) {      
-//Test
-  // Init PS
-  wait_us(500);
-  _ps = 0;
-  wait_us(250);
-  
+                               _i2c(i2c){
   
   _slaveAddress = deviceAddress & 0xFE;
   
@@ -2205,14 +2574,7 @@ void TextLCD_SPI_N::_writeByte(int value) {
 TextLCD_SPI_N_3_9::TextLCD_SPI_N_3_9(SPI *spi, PinName cs, LCDType type, PinName bl, LCDCtrl ctrl) :
                                      TextLCD_Base(type, ctrl), 
                                      _spi(spi),        
-//                                     _cs(cs) {      
-
-                                     _cs(cs), _ps(p20) {      
-
-  // Init PS
-  wait_us(500);
-  _ps = 0;
-  wait_us(250);
+                                     _cs(cs) {      
 
   // Init CS
   _cs = 1;
@@ -2489,8 +2851,6 @@ void TextLCD_SPI_N_3_16::_writeByte(int value) {
 #endif
 
 #if(1)
-//Code to be checked out on logic analyser. Not yet tested on hardware..
-
 //------- Start TextLCD_SPI_N_3_24 --------
 
  /** Create a TextLCD interface using a controller with a native SPI3 24 bits interface
