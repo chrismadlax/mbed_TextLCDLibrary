@@ -15,6 +15,7 @@
  *               2014, v13: WH, Added support for controllers US2066/SSD1311 (OLED), added setUDCBlink() method for supported devices (eg SSD1803), fixed issue in setPower() 
  *               2014, v14: WH, Added support for PT6314 (VFD), added setOrient() method for supported devices (eg SSD1803, US2066), added Double Height lines for supported devices, 
  *                              added 16 UDCs for supported devices (eg PCF2103), moved UDC defines to TextLCD_UDC file, added TextLCD_Config.h for feature and footprint settings.
+ *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -1574,12 +1575,23 @@ void TextLCD_Base::_setCursorAndDisplayMode(LCDMode displayMode, LCDCursor curso
   */
 void TextLCD_Base::setBacklight(LCDBacklight backlightMode) {
 
+#if (BACKLIGHT_INV==0)      
+    // Positive Backlight control pin logic
     if (backlightMode == LightOn) {
-      this->_setBL(true);
+      this->_setBL(true);     
     }
     else {
       this->_setBL(false);    
     }
+#else
+    // Inverted Backlight control pin logic
+    if (backlightMode == LightOn) {
+      this->_setBL(false);    
+    }
+    else {
+      this->_setBL(true);           
+    }
+#endif    
 } 
 
 /** Set User Defined Characters
@@ -1614,28 +1626,6 @@ void TextLCD_Base::setUDC(unsigned char c, char *udc_data) {
   }   
 }
 
-
-#if(0)
-/** Low level method to store user defined characters for current controller
-  *
-  * @param unsigned char c   The Index of the UDC (0..7) for HD44780 clones 
-  * @param char *udc_data    The bitpatterns for the UDC (8 bytes of 5 significant bits)     
-  */     
-void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
-  
-  // Select CG RAM for current LCD controller
-  _writeCommand(0x40 + ((c & 0x07) << 3)); //Set CG-RAM address,
-                                           //8 sequential locations needed per UDC
-  // Store UDC pattern 
-  for (int i=0; i<8; i++) {
-    _writeData(*udc_data++);
-  }
-   
-  //Select DD RAM again for current LCD controller
-  int addr = getAddress(_column, _row);
-  _writeCommand(0x80 | addr);  
-}
-#else
 /** Low level method to store user defined characters for current controller
   *
   * @param unsigned char c   The Index of the UDC (0..7) for HD44780 clones and (0..15) for some more advanced controllers 
@@ -1673,7 +1663,6 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
   int addr = getAddress(_column, _row);
   _writeCommand(0x80 | addr);  
 }
-#endif
 
 /** Set UDC Blink
   * setUDCBlink method is supported by some compatible devices (eg SSD1803) 
@@ -2322,10 +2311,6 @@ void TextLCD_I2C::_setRS(bool value) {
 // Used for mbed pins, I2C bus expander or SPI shiftregister
 void TextLCD_I2C::_setBL(bool value) {
 
-#if (DFROBOT==1)  
-  value = !value; // The DFRobot module uses PNP transistor to drive the Backlight. Reverse logic level.
-#endif
-  
   if (value) {
     _lcd_bus |= D_LCD_BL;    // Set BL bit 
   }  

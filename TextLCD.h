@@ -15,6 +15,7 @@
  *               2014, v13: WH, Added support for controllers US2066/SSD1311 (OLED), added setUDCBlink() method for supported devices (eg SSD1803), fixed issue in setPower() 
  *               2014, v14: WH, Added support for PT6314 (VFD), added setOrient() method for supported devices (eg SSD1803, US2066), added Double Height lines for supported devices, 
  *                              added 16 UDCs for supported devices (eg PCF2103), moved UDC defines to TextLCD_UDC file, added TextLCD_Config.h for feature and footprint settings.
+ *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -128,18 +129,22 @@
 #define LCD_C_ICN      0x00040000  /*Icons               */
 #define LCD_C_PDN      0x00080000  /*Power Down          */
 
-
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
  * @brief Currently supports 8x1, 8x2, 12x2, 12x3, 12x4, 16x1, 16x2, 16x3, 16x4, 20x2, 20x4, 24x2, 24x4, 40x2 and 40x4 panels
  *        Interface options include direct mbed pins, I2C portexpander (PCF8474/PCF8574A or MCP23008) or SPI bus shiftregister (74595) and some native I2C or SPI devices 
  *
  */
-#if(LCD_PRINTF == 1)
 class TextLCD_Base : public Stream {
-#else    
-class TextLCD_Base{    
-#endif
+//class TextLCD_Base{    
+
+//Unfortunately this #define selection breaks Doxygen !!!
+//#if (LCD_PRINTF == 1)
+//class TextLCD_Base : public Stream {
+//#else    
+//class TextLCD_Base{    
+//#endif
+
 public:
 
     /** LCD panel format */
@@ -210,7 +215,7 @@ public:
 //        SSD1803_5V  = 15 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
         US2066_3V3  = 16 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_CTR | LCD_C_PDN),               /**<  US2066/SSD1311 3V3, 4/8 bit, I2C, SPI3 */
         PT6314      = 17 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR),                                       /**<  PT6314  VFD, 4/8 bit, SPI3                   */
-//        AC780       = 18 | (LCD_C_PAR | LCD_C_SPI4 | LCD_C_I2C | LCD_C_PDN)                               /**<  AC780/KS0066i 4/8 bit, SPI, I2C              */
+        AC780       = 18 | (LCD_C_PAR | LCD_C_SPI4 | LCD_C_I2C | LCD_C_PDN)                               /**<  AC780/KS0066i 4/8 bit, SPI, I2C              */
 //        WS0012      = 19 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_I2C | LCD_C_PDN)                            /**<  WS0012 4/8 bit, SPI, I2C                     */
     };
 
