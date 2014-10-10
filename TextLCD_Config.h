@@ -1,6 +1,7 @@
 /* mbed TextLCD Library, for a 4-bit LCD based on HD44780
  * Copyright (c) 2014, WH
  *               2014, v01: WH, Extracted from TextLCD.h as of v14
+ *               2014, v02: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,11 +29,12 @@
 #define LCD_I2C        1           /* I2C Expander PCF8574/MCP23008 */
 #define LCD_SPI        1           /* SPI Expander SN74595          */
 #define LCD_I2C_N      1           /* Native I2C bus     */
+#define LCD_SPI_N      1           /* Native SPI bus     */
 #define LCD_SPI_N_3_9  1           /* Native SPI bus     */
 #define LCD_SPI_N_3_10 1           /* Native SPI bus     */
 #define LCD_SPI_N_3_16 1           /* Native SPI bus     */
 #define LCD_SPI_N_3_24 1           /* Native SPI bus     */
-#define LCD_SPI_N_4    1           /* Native SPI bus     */
+
 
 //Select options to reduce memory footprint (multiple options allowed)
 #define LCD_UDC        1           /* Enable predefined UDC example*/                
@@ -45,6 +47,9 @@
 #define DEFAULT        1
 #define ADAFRUIT       0
 #define DFROBOT        0
+#define YWROBOT        0
+#define GYLCD          0
+#define SYDZ           0
 
 //Select Hardware module (one option only)
 #if (DEFAULT==1)
@@ -69,11 +74,15 @@
 //Select I2C Portexpander type (one option only)
 #define PCF8574        1
 #define MCP23008       0
+
+//Inverted Backlight control
+#define BACKLIGHT_INV  0
 #endif
 
 #if (ADAFRUIT==1)
 //Definitions for Adafruit i2cspilcdbackpack mapping between serial port expander pins and LCD controller
 //This hardware supports both an I2C expander (MCP23008) and an SPI expander (74595) selectable by a jumper.
+//Slaveaddress may be set by solderbridges (default 0x40). SDA/SCL has pullup Resistors onboard.
 //See http://www.ladyada.net/products/i2cspilcdbackpack
 //
 //Note: LCD RW pin must be kept LOW
@@ -93,15 +102,53 @@
 //Force I2C portexpander type
 #define PCF8574        0
 #define MCP23008       1
+
+//Inverted Backlight control
+#define BACKLIGHT_INV  0
 #endif
 
 #if (DFROBOT==1)
 //Definitions for DFROBOT LCD2004 Module mapping between serial port expander pins and LCD controller
 //This hardware uses PCF8574 and is different from earlier/different Arduino I2C LCD displays
+//Slaveaddress hardwired to 0x4E. SDA/SCL has pullup Resistors onboard.
 //See http://arduino-info.wikispaces.com/LCD-Blue-I2C
+//
+//Definitions for DFROBOT V1.1 
+//This hardware uses PCF8574. Slaveaddress may be set by jumpers (default 0x40).
+//SDA/SCL has pullup Resistors onboard and features a voltage level converter 3V3 <-> 5V.
+//See http://www.dfrobot.com/index.php?route=product/product&product_id=135
+//
 //
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default Arduino hardware and so it does not support LCD40x4 (second controller)
+//      BL is used to control backlight
+#define D_LCD_PIN_RS   0
+#define D_LCD_PIN_RW   1
+#define D_LCD_PIN_E    2
+#define D_LCD_PIN_BL   3
+#define D_LCD_PIN_D4   4
+#define D_LCD_PIN_D5   5
+#define D_LCD_PIN_D6   6
+#define D_LCD_PIN_D7   7
+
+#define D_LCD_PIN_E2   D_LCD_PIN_RW
+
+//Force I2C portexpander type
+#define PCF8574        1
+#define MCP23008       0
+
+//Inverted Backlight control
+#define BACKLIGHT_INV  0
+#endif
+
+#if (YWROBOT==1)
+//Definitions for YWROBOT LCM1602 V1 Module mapping between serial port expander pins and LCD controller. 
+//Very similar to DFROBOT. This hardware uses PCF8574.
+//Slaveaddress may be set by solderbridges (default 0x4E). SDA/SCL has no pullup Resistors onboard.
+//See http://arduino-info.wikispaces.com/LCD-Blue-I2C
+//
+//Note: LCD RW pin must be kept LOW
+//      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
 //      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
 #define D_LCD_PIN_RS   0
 #define D_LCD_PIN_RW   1
@@ -117,8 +164,66 @@
 //Force I2C portexpander type
 #define PCF8574        1
 #define MCP23008       0
+
+//Inverted Backlight control
+#define BACKLIGHT_INV  0
 #endif
 
+#if (GYLCD==1)
+//Definitions for Arduino-IIC-LCD GY-LCD-V1 Module mapping between serial port expander pins and LCD controller. 
+//Very similar to DFROBOT. This hardware uses PCF8574.
+//Slaveaddress may be set by solderbridges (default 0x4E). SDA/SCL has pullup Resistors onboard.
+//See http://arduino-info.wikispaces.com/LCD-Blue-I2C
+//
+//Note: LCD RW pin must be kept LOW
+//      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
+//      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
+#define D_LCD_PIN_D4   0
+#define D_LCD_PIN_D5   1
+#define D_LCD_PIN_D6   2
+#define D_LCD_PIN_D7   3
+#define D_LCD_PIN_EN   4
+#define D_LCD_PIN_RW   5
+#define D_LCD_PIN_RS   6
+#define D_LCD_PIN_BL   7
+
+#define D_LCD_PIN_E2   D_LCD_PIN_RW
+
+//Force I2C portexpander type
+#define PCF8574        1
+#define MCP23008       0
+
+//Force Inverted Backlight control
+#define BACKLIGHT_INV  1
+#endif
+
+#if (SYDZ==1)
+//Definitions for SYDZ Module mapping between serial port expander pins and LCD controller. 
+//Very similar to DFROBOT. This hardware uses PCF8574A and uses inverted Backlight control
+//Slaveaddress may be set by switches (default 0x40). SDA/SCL has pullup Resistors onboard.
+//See ebay
+//
+//Note: LCD RW pin must be kept LOW
+//      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
+//      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
+#define D_LCD_PIN_RS   0
+#define D_LCD_PIN_RW   1
+#define D_LCD_PIN_E    2
+#define D_LCD_PIN_BL   3
+#define D_LCD_PIN_D4   4
+#define D_LCD_PIN_D5   5
+#define D_LCD_PIN_D6   6
+#define D_LCD_PIN_D7   7
+
+#define D_LCD_PIN_E2   D_LCD_PIN_RW
+
+//Force I2C portexpander type
+#define PCF8574        1
+#define MCP23008       0
+
+//Force Inverted Backlight control
+#define BACKLIGHT_INV  1
+#endif
 
 //Bitpattern Defines for I2C PCF8574/PCF8574A, MCP23008 and SPI 74595 Bus expanders
 //
