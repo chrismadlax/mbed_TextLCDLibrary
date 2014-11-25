@@ -2,6 +2,7 @@
  * Copyright (c) 2014, WH
  *               2014, v01: WH, Extracted from TextLCD.h as of v14
  *               2014, v02: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define
+ *               2014, v03: WH, Added LCD_SPI_N_3_8 define for ST7070
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,17 +25,16 @@
 #ifndef MBED_TEXTLCDCONFIG_H
 #define MBED_TEXTLCDCONFIG_H
 
-
 //Select hardware interface options to reduce memory footprint (multiple options allowed)
 #define LCD_I2C        1           /* I2C Expander PCF8574/MCP23008 */
 #define LCD_SPI        1           /* SPI Expander SN74595          */
 #define LCD_I2C_N      1           /* Native I2C bus     */
 #define LCD_SPI_N      1           /* Native SPI bus     */
+#define LCD_SPI_N_3_8  1           /* Native SPI bus     */
 #define LCD_SPI_N_3_9  1           /* Native SPI bus     */
 #define LCD_SPI_N_3_10 1           /* Native SPI bus     */
 #define LCD_SPI_N_3_16 1           /* Native SPI bus     */
 #define LCD_SPI_N_3_24 1           /* Native SPI bus     */
-
 
 //Select options to reduce memory footprint (multiple options allowed)
 #define LCD_UDC        1           /* Enable predefined UDC example*/                
