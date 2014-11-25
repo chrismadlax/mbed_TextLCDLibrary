@@ -16,6 +16,7 @@
  *               2014, v14: WH, Added support for PT6314 (VFD), added setOrient() method for supported devices (eg SSD1803, US2066), added Double Height lines for supported devices, 
  *                              added 16 UDCs for supported devices (eg PCF2103), moved UDC defines to TextLCD_UDC file, added TextLCD_Config.h for feature and footprint settings.
  *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
+ *               2014, v16: WH, Added ST7070 and KS0073 support, added setIcon(), clrIcon() and setInvert() method for supported devices 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -58,21 +59,22 @@ TextLCD_Base::TextLCD_Base(LCDType type, LCDCtrl ctrl) : _type(type), _ctrl(ctrl
   _addr_mode = _type & LCD_T_ADR_MSK;
 }
 
-
 /**  Init the LCD Controller(s)
   *  Clear display 
+  *  @param _LCDDatalength dl sets the datalength of data/commands
+  *  @return none 
   */
-void TextLCD_Base::_init() {
+void TextLCD_Base::_init(_LCDDatalength dl) {
   
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
     _ctrl_idx=_LCDCtrl_1;        // Select 2nd controller   
-    _initCtrl();                 // Init 2nd controller   
+    _initCtrl(dl);               // Init 2nd controller   
   }
     
   // Select and configure primary LCD controller
   _ctrl_idx=_LCDCtrl_0;          // Select primary controller  
-  _initCtrl();                   // Init primary controller
+  _initCtrl(dl);                 // Init primary controller
 
   // Clear whole display and Reset Cursor location
   // Note: This will make sure that some 3-line displays that skip topline of a 4-line configuration 
@@ -81,14 +83,19 @@ void TextLCD_Base::_init() {
 } 
 
 /**  Init the LCD controller
-  *  4-bit mode, number of lines, fonttype, no cursor etc
+  *   Set number of lines, fonttype, no cursor etc
+  *   The controller is accessed in 4-bit parallel mode either directly via mbed pins or through I2C or SPI expander.
+  *   Some controllers also support native I2C or SPI interfaces. 
+  *
+  *  @param _LCDDatalength dl sets the 4 or 8 bit datalength of data/commands. Required for some native serial modes.
+  *  @return none  
   *
   *  Note: some configurations are commented out because they have not yet been tested due to lack of hardware
   */
-void TextLCD_Base::_initCtrl() {
+void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
   int _bias_lines=0; // Set Bias and lines (Instr Set 1), temporary variable.
   int _lines=0;      // Set lines (Ext Instr Set), temporary variable.
-      
+
     this->_setRS(false); // command mode
     
     wait_ms(20);         // Wait 20ms to ensure powered up
@@ -124,6 +131,115 @@ void TextLCD_Base::_initCtrl() {
     // Device specific initialisations: DC/DC converter to generate VLCD or VLED, number of lines etc
     switch (_ctrl) {
 
+      case KS0073:
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD12x1:                                
+            case LCD16x1:                                            
+            case LCD20x1:
+            case LCD24x1:
+//            case LCD32x1:        // EXT pin is High, extension driver needed
+//            case LCD40x1:        // EXT pin is High, extension driver needed                        
+              _function  = 0x02;    // Function set 001 DL N RE(0) DH REV (Std Regs)
+                                    //   DL=0  (4 bits bus)             
+                                    //    N=0  (1-line mode, N=1 2-line mode)
+                                    //   RE=0  (Dis. Extended Regs, special mode for KS0073)
+                                    //   DH=1  (Disp shift enable, special mode for KS0073)                                
+                                    //   REV=0 (Reverse normal, special mode for KS0073)
+                                    
+              _function_1 = 0x04;   // Function set 001 DL N RE(1) BE LP (Ext Regs)
+                                    //   DL=0  (4 bits bus)             
+                                    //    N=0  (1-line mode, N=1 2-line mode)
+                                    //   RE=1  (Ena Extended Regs, special mode for KS0073)
+                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for KS0073)                                
+                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)
+
+              _function_x = 0x00;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
+                                    //    NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0073)                                
+              break;                                
+
+//            case LCD12x3D:         // Special mode for KS0073, KS0078 and PCF21XX            
+//            case LCD12x3D1:        // Special mode for KS0073, KS0078 and PCF21XX            
+            case LCD12x4D:         // Special mode for KS0073, KS0078 and PCF21XX            
+//            case LCD16x3D:         // Special mode for KS0073, KS0078             
+//            case LCD16x4D:         // Special mode for KS0073, KS0078            
+            case LCD20x4D:         // Special mode for KS0073, KS0078            
+              _function  = 0x02;    // Function set 001 DL N RE(0) DH REV (Std Regs)
+                                    //   DL=0  (4 bits bus)             
+                                    //    N=0  (dont care for 4 line mode)              
+                                    //   RE=0  (Dis. Extended Regs, special mode for KS0073)
+                                    //   DH=1  (Disp shift enable, special mode for KS0073)                                
+                                    //   REV=0 (Reverse normal, special mode for KS0073)
+                                    
+              _function_1 = 0x04;   // Function set 001 DL N RE(1) BE LP (Ext Regs)
+                                    //   DL=0  (4 bits bus)             
+                                    //    N=0  (1-line mode), N=1 (2-line mode)
+                                    //   RE=1  (Ena Extended Regs, special mode for KS0073)
+                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for KS0073)                                
+                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)                                    
+
+              _function_x = 0x01;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
+                                    //    NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0073)                                
+              break;                                
+
+
+            case LCD16x3G:            // Special mode for ST7036                        
+//            case LCD24x3D:         // Special mode for KS0078
+//            case LCD24x3D1:        // Special mode for KS0078
+            case LCD24x4D:         // Special mode for KS0078
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+
+            default:
+              // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)            
+              _function  = 0x0A;    // Function set 001 DL N RE(0) DH REV (Std Regs)
+                                    //   DL=0  (4 bits bus)             
+                                    //    N=1  (2-line mode), N=0 (1-line mode)
+                                    //   RE=0  (Dis. Extended Regs, special mode for KS0073)
+                                    //   DH=1  (Disp shift enable, special mode for KS0073)                                
+                                    //   REV=0 (Reverse normal, special mode for KS0073)
+                                    
+              _function_1 = 0x0C;   // Function set 001 DL N RE(1) BE LP (Ext Regs)
+                                    //   DL=0  (4 bits bus)             
+                                    //    N=1  (2 line mode), N=0 (1-line mode)
+                                    //   RE=1  (Ena Extended Regs, special mode for KS0073)
+                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for KS0073)                   
+                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)                                                                                     
+
+              _function_x = 0x00;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
+                                    //   NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0073)                                
+              break;
+          } // switch type
+
+          // init special features
+          _writeCommand(0x20 | _function_1);// Function set 001 DL N RE(1) BE LP (Ext Regs)
+                                           //   DL=0 (4 bits bus), DL=1 (8 bits mode)            
+                                           //    N=0 (1 line mode), N=1 (2 line mode)
+                                           //   RE=1 (Ena Extended Regs, special mode for KS0073)
+                                           //   BE=0 (Blink Enable/Disable, CG/SEG RAM, special mode for KS0073)                                
+                                           //   LP=0  (LP=1 Low power mode, LP=0 Normal)                                                                                                                                
+
+          _writeCommand(0x08 | _function_x); // Ext Function set 0000 1 FW BW NW (Ext Regs)
+                                           //   FW=0  (5-dot font, special mode for KS0073)
+                                           //   BW=0  (Cur BW invert disable, special mode for KS0073)
+                                           //   NW=0  (1,2 Line), NW=1 (4 line, special mode for KS0073)                                
+
+          _writeCommand(0x10);             // Scroll/Shift set 0001 DS/HS4 DS/HS3 DS/HS2 DS/HS1 (Ext Regs)
+                                           //   Dotscroll/Display shift enable (Special mode for KS0073)
+
+          _writeCommand(0x80);             // Scroll Quantity set 1 0 SQ5 SQ4 SQ3 SQ2 SQ1 SQ0 (Ext Regs)
+                                           //   Scroll quantity (Special mode for KS0073)
+
+          _writeCommand(0x20 | _function); // Function set 001 DL N RE(0) DH REV (Std Regs)
+                                           //   DL=0  (4 bits bus), DL=1 (8 bits mode)             
+                                           //    N=0  (1 line mode), N=1 (2 line mode)
+                                           //   RE=0  (Dis. Extended Regs, special mode for KS0073)
+                                           //   DH=1  (Disp shift enable/disable, special mode for KS0073)                                
+                                           //   REV=0 (Reverse/Normal, special mode for KS0073)
+          break; // case KS0073 Controller
+
+
       case KS0078:
           // Initialise Display configuration
           switch (_type) {
@@ -151,11 +267,12 @@ void TextLCD_Base::_initCtrl() {
                                     //    NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0078)                                
               break;                                
 
-//            case LCD12x3D:         // Special mode for KS0078 and PCF21XX            
-//            case LCD12x3D1:        // Special mode for KS0078 and PCF21XX            
-//            case LCD12x4D:         // Special mode for KS0078 and PCF21XX            
-//            case LCD16x3D:         // Special mode for KS0078             
-//            case LCD16x4D:         // Special mode for KS0078            
+//            case LCD12x3D:         // Special mode for KS0073, KS0078 and PCF21XX            
+//            case LCD12x3D1:        // Special mode for KS0073, KS0078 and PCF21XX            
+//            case LCD12x4D:         // Special mode for KS0073, KS0078 and PCF21XX            
+//            case LCD16x3D:         // Special mode for KS0073, KS0078             
+//            case LCD16x4D:         // Special mode for KS0073, KS0078            
+//            case LCD20x4D:         // Special mode for KS0073, KS0078            
 //            case LCD24x3D:         // Special mode for KS0078
 //            case LCD24x3D1:        // Special mode for KS0078
             case LCD24x4D:         // Special mode for KS0078
@@ -273,11 +390,13 @@ void TextLCD_Base::_initCtrl() {
 
 
           if (_ctrl == ST7032_3V3) {
-            _icon_power = 0x04;                             // Icon display off, Booster circuit is turned on  (IS=1)
+//            _icon_power = 0x04;                             // Icon display off, Booster circuit is turned on  (IS=1)
+            _icon_power = 0x0C;                             // Icon display on, Booster circuit is turned on  (IS=1)            
                                                             // Saved to allow contrast change at later time
           }
           else { 
-            _icon_power = 0x00;                             // Icon display off, Booster circuit is turned off  (IS=1)
+//            _icon_power = 0x00;                             // Icon display off, Booster circuit is turned off  (IS=1)
+            _icon_power = 0x08;                             // Icon display on, Booster circuit is turned off  (IS=1)            
                                                             // Saved to allow contrast change at later time
           }
           _writeCommand(0x50 | _icon_power | ((_contrast >> 4) & 0x03));  // Set Icon, Booster and Contrast High bits, 0 1 0 1 Ion Bon C5 C4 (IS=1)
@@ -347,11 +466,13 @@ void TextLCD_Base::_initCtrl() {
           _writeCommand(0x70 | (_contrast & 0x0F)); // Set Contrast, 0 1 1 1 C3 C2 C1 C0 (Instr Set 1)
                            
           if (_ctrl == ST7036_3V3) {
-            _icon_power = 0x04;                       // Set Icon, Booster, Contrast High bits, 0 1 0 1 Ion=0 Bon=1 C5 C4 (Instr Set 1)
+            _icon_power = 0x0C;                       // Set Icon, Booster, Contrast High bits, 0 1 0 1 Ion=1 Bon=1 C5 C4 (Instr Set 1)            
+//            _icon_power = 0x04;                       // Set Icon, Booster, Contrast High bits, 0 1 0 1 Ion=0 Bon=1 C5 C4 (Instr Set 1)
                                                       // Saved to allow contrast change at later time
           } 
           else {
-            _icon_power = 0x00;                       // Set Icon, Booster, Contrast High bits, 0 1 0 1 Ion=0 Bon=0 C5 C4 (Instr Set 1)             
+            _icon_power = 0x08;                       // Set Icon, Booster, Contrast High bits, 0 1 0 1 Ion=1 Bon=0 C5 C4 (Instr Set 1)             
+//            _icon_power = 0x00;                       // Set Icon, Booster, Contrast High bits, 0 1 0 1 Ion=0 Bon=0 C5 C4 (Instr Set 1)                         
           }
           
           _writeCommand(0x50 | _icon_power | ((_contrast >> 4) & 0x03));   // Set Contrast C5, C4 (Instr Set 1)
@@ -364,7 +485,52 @@ void TextLCD_Base::_initCtrl() {
          
           break; // case ST7036_3V3 Controller
                  // case ST7036_5V Controller
-        
+
+      case ST7070:                   
+          // Initialise Display configuration
+          switch (_type) {
+            case LCD8x1:         //8x1 is a regular 1 line display
+            case LCD8x2B:        //8x2D is a special case of 16x1
+//            case LCD12x1:                                
+            case LCD16x1:   
+            case LCD24x1:                                                                         
+              _function = dl | 0x00;      // Set function, 0 0 1 DL=0 (4-bit Databus), N=0 (1 Line), EXT=0, x, x 
+                                          // Note: 4 bit mode is NOT ignored for native SPI !
+                                          // Saved to allow switch between Instruction sets at later time
+              break;  
+
+//            case LCD12x3D1:           // Special mode for KS0078 and PCF21XX
+//            case LCD16x3D1:           // Special mode for SSD1803
+            case LCD12x4D:            // Special mode for PCF2116
+            case LCD24x4D:            // Special mode for KS0078
+//            case LCD12x3G:          // Special mode for ST7036
+            case LCD16x3G:          // Special mode for ST7036           
+              error("Error: LCD Controller type does not support this Display type\n\r"); 
+              break;  
+
+            default:
+              // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)       
+              _function = dl | 0x08;   // Set function, 0 0 1 DL, N=1 (2 Line), EXT=0, x, x                                                                 
+                                       // Note: 4 bit mode is NOT ignored for native SPI !
+                                       // Saved to allow switch between Instruction sets at later time
+              break;                
+          } // switch type
+
+//          _writeCommand(0x00);                      // NOP, make sure to sync SPI
+          
+          // init special features                                                    
+          _writeCommand(0x20 | _function | 0x04);   // Set function, 0 0 1 DL N EXT=1 x x (Select Instr Set = 1)
+
+          _writeCommand(0x04 | 0x00);               // Set Bias resistors  0 0 0 0 0 1 Rb1,Rb0= 0 0 (Extern Res) (Instr Set 1)
+
+          _writeCommand(0x40 | 0x00);               // COM/SEG directions 0 1 0 0 C1, C2, S1, S2  (Instr Set 1)
+                                                    // C1=1: Com1-8 -> Com8-1;   C2=1: Com9-16 -> Com16-9
+                                                    // S1=1: Seg1-40 -> Seg40-1; S2=1: Seg41-80 -> Seg80-41                                                    
+          
+          _writeCommand(0x20 | _function);          // Set function, EXT=0 (Select Instr Set = 0)
+         
+          break; // case ST7070 Controller
+         
       case SSD1803_3V3:
           // SSD1803 controller: Initialise Voltage booster for VLCD. VDD=3V3
           // Note: supports 1,2, 3 or 4 lines
@@ -457,6 +623,7 @@ void TextLCD_Base::_initCtrl() {
                                     //         Note: 4 bit mode is ignored for native SPI and I2C devices
                                     //     N=1 2 line / 4 Line
                                     //    DH=0 Double Height disable 
+                                    //    RE=0
                                     //    IS=0
           
               _function_1 = 0x0A;   // Set function, 0 0 1 DL N BE RE(1) REV
@@ -465,6 +632,7 @@ void TextLCD_Base::_initCtrl() {
                                     //         Note: 4 bit mode is ignored for native SPI and I2C devices
                                     //     N=1 2 line / 4 Line
                                     //    BE=0 Blink Enable off, special feature of SSD1803
+                                    //    RE=1
                                     //   REV=0 Reverse off, special feature of SSD1803            
                         
               _lines = 0x00;        // Ext function set 0 0 0 0 1 FW BW NW 
@@ -494,7 +662,8 @@ void TextLCD_Base::_initCtrl() {
           _contrast = LCD_SSD1_CONTRAST;
           _writeCommand(0x70 | (_contrast & 0x0F)); // Set Contrast 0 1 1 1 C3, C2, C1, C0 (Instr Set 1)
                            
-          _icon_power = 0x04;                       // Icon off, Booster on (Instr Set 1)
+//          _icon_power = 0x04;                       // Icon off, Booster on (Instr Set 1)
+          _icon_power = 0x0C;                       // Icon on, Booster on (Instr Set 1)          
                                                     // Saved to allow contrast change at later time
           _writeCommand(0x50 | _icon_power | ((_contrast >> 4) & 0x03));   // Set Power, Icon and Contrast, 0 1 0 1 Ion Bon C5 C4 (Instr Set 1)
           wait_ms(10);            // Wait 10ms to ensure powered up
@@ -558,6 +727,7 @@ void TextLCD_Base::_initCtrl() {
 
           _writeCommand(0x20 | _function);                 // Set function, Select Instr Set = 0             
           
+#if(0)
           // Select CG RAM
           _writeCommand(0x40); //Set CG-RAM address, 8 sequential locations needed per UDC
           // Store UDC/Icon pattern: 
@@ -567,7 +737,7 @@ void TextLCD_Base::_initCtrl() {
 //            _writeData(0x1F);  // All On
             _writeData(0x00);  // All Off            
           }
-
+#endif
           break; // case PCF2103_3V3 Controller
 
       case PCF2113_3V3:
@@ -1088,6 +1258,7 @@ void TextLCD_Base::_initCtrl() {
 
 //    _writeCommand(0x0C); // Display Ctrl 0000 1 D C B
 //                         //   Display On, Cursor Off, Blink Off   
+
     setCursor(CurOff_BlkOff);     
     setMode(DispOn);     
 }
@@ -1280,7 +1451,7 @@ int TextLCD_Base::_address(int column, int row) {
    *
    * @param column  The horizontal position from the left, indexed from 0
    * @param row     The vertical position from the top, indexed from 0
-   * @param return  The memoryaddress of screen column and row location
+   * @return        The memoryaddress of screen column and row location
    *
    */
 int TextLCD_Base::getAddress(int column, int row) {
@@ -1335,7 +1506,7 @@ int TextLCD_Base::getAddress(int column, int row) {
 //            return 0x00 + (row * 40) + column;
 
         case LCD_T_D:
-          //Alternate addressing mode for 3 and 4 row displays (except 40x4). Used by PCF21XX, KS0078, SSD1803
+          //Alternate addressing mode for 3 and 4 row displays (except 40x4). Used by PCF21XX, KS0073, KS0078, SSD1803
           //The 4 available rows start at a hardcoded address.                    
           //Displays top rows when less than four are used.
           switch (row) {
@@ -1353,7 +1524,7 @@ int TextLCD_Base::getAddress(int column, int row) {
             }
 
         case LCD_T_D1:
-          //Alternate addressing mode for 3 row displays. Used by PCF21XX, KS0078, SSD1803
+          //Alternate addressing mode for 3 row displays. Used by PCF21XX, KS0073, KS0078, SSD1803
           //The 4 available rows start at a hardcoded address.                              
           //Skips top row of 4 row display and starts display at row 1
           switch (row) {
@@ -1455,16 +1626,16 @@ void TextLCD_Base::setAddress(int column, int row) {
     if (column < 0) {
       _column = 0;
     }
-    else if (column >= columns()) {
-      _column = columns() - 1;
+    else if (column >= _nr_cols) {
+      _column = _nr_cols - 1;
     } else _column = column;
     
 // Sanity Check row
     if (row < 0) {
       _row = 0;
     }
-    else if (row >= rows()) {
-      _row = rows() - 1;
+    else if (row >= _nr_rows) {
+      _row = _nr_rows - 1;
     } else _row = row;
     
     
@@ -1479,7 +1650,7 @@ void TextLCD_Base::setAddress(int column, int row) {
 
 /** Return the number of columns
   *
-  * @param return  The number of columns
+  * @return  The number of columns
   *
   * Note: some configurations are commented out because they have not yet been tested due to lack of hardware     
   */   
@@ -1492,7 +1663,7 @@ int TextLCD_Base::columns() {
 
 /** Return the number of rows
   *
-  * @param return  The number of rows
+  * @return  The number of rows
   *
   * Note: some configurations are commented out because they have not yet been tested due to lack of hardware     
   */
@@ -1560,13 +1731,20 @@ void TextLCD_Base::setMode(LCDMode displayMode) {
   }       
 }
 
-
 /** Low level method to restore the cursortype and display mode for current controller
   */     
-void TextLCD_Base::_setCursorAndDisplayMode(LCDMode displayMode, LCDCursor cursorType) { 
-    
-    // Configure current LCD controller       
-    _writeCommand(0x08 | displayMode | cursorType);
+void TextLCD_Base::_setCursorAndDisplayMode(LCDMode displayMode, LCDCursor cursorType) {    
+
+  // Configure current LCD controller   
+  switch (_ctrl) {
+    case ST7070: 
+      //ST7070 does not support Cursorblink. The P bit selects the font instead !   
+      _writeCommand(0x08 | displayMode | (cursorType & 0x02));    
+      break;
+    default:      
+      _writeCommand(0x08 | displayMode | cursorType);
+      break;
+  } //switch      
 }
 
 /** Set the Backlight mode
@@ -1664,15 +1842,15 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
   _writeCommand(0x80 | addr);  
 }
 
-/** Set UDC Blink
+/** Set UDC Blink and Icon blink
   * setUDCBlink method is supported by some compatible devices (eg SSD1803) 
   *
   * @param blinkMode The Blink mode (BlinkOff, BlinkOn)
   */
 void TextLCD_Base::setUDCBlink(LCDBlink blinkMode){
-  // Blinking UDCs are enabled when a specific controlbit (BE) is set.
-  // The blinking pixels in the UDC can be controlled by setting additional bits in the UDC bitpattern.
-  // UDCs are defined by an 8 byte bitpattern. The P0..P5 form the character pattern.
+  // Blinking UDCs (and icons) are enabled when a specific controlbit (BE) is set.
+  // The blinking pixels in the UDC and icons can be controlled by setting additional bits in the UDC or icon bitpattern.
+  // UDCs are defined by an 8 byte bitpattern. The P0..P4 form the character pattern.
   //     P7 P6 P5 P4 P3 P2 P1 P0 
   // 0   B1 B0  x  0  1  1  1  0
   // 1   B1 B0  x  1  0  0  0  1
@@ -1684,61 +1862,89 @@ void TextLCD_Base::setUDCBlink(LCDBlink blinkMode){
   //      0  0  No Blinking in this row of the UDC
   //      0  1  Enabled pixels in P4 will blink
   //      1  x  Enabled pixels in P0..P4 will blink
-
+  //
+  // Note: the PCF2103 and PCF2113 use UDCs to set Icons 
+  //   3 x 8 rows x 5 bits = 120 bits Icons for Normal pattern (UDC 0..2) and
+  //   3 x 8 rows x 5 bits = 120 bits Icons for Blink pattern (UDC 4..6) 
+  // Note: the PCF2119 uses UDCs to set Icons 
+  //   4 x 8 rows x 5 bits = 160 bits Icons for Normal pattern (UDC 0..3) and
+  //   4 x 8 rows x 5 bits = 160 bits Icons for Blink pattern (UDC 4..7) 
   switch (blinkMode) {
     case BlinkOn: 
-      // Controllers that support UDC Blink  
+      // Controllers that support UDC/Icon Blink  
       switch (_ctrl) {
+        case KS0073 :            
         case KS0078 :            
-          _function_1 |= 0x02; // Enable UDC Blink        
-          _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0 (Ext Regs)
+          _function_1 |= 0x02; // Enable UDC/Icon Blink        
+          _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0/LP (Ext Regs)
 
           _writeCommand(0x20 | _function);          // Function set 0 0 1 DL N RE(0) DH REV (Std Regs)
-          break; // case KS0078 Controller
+          break; // case KS0073, KS0078 Controller
     
         case US2066_3V3 :  
         case SSD1803_3V3 :  
-          _function_1 |= 0x04; // Enable UDC Blink
+          _function_1 |= 0x04; // Enable UDC/Icon Blink
           _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
                                                     // Select Ext Instr Set
 
           _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
                                                     // Select Std Instr set, Select IS=0
           break; // case SSD1803, US2066
+
+        case PCF2103_3V3 :  
+        case PCF2113_3V3 :  
+        case PCF2119_3V3 :                  
+          // Enable Icon Blink
+          _writeCommand(0x20 | _function | 0x01);   // Set function, Select Instr Set = 1              
+          _writeCommand(0x08 | 0x02);               // ICON Conf 0000 1, IM=0 (Char mode), IB=1 (Icon blink), 0 (Instr. Set 1) 
+          _writeCommand(0x20 | _function);          // Set function, Select Instr Set = 0             
+
+          break; 
        
         default:
           //Unsupported feature for other controllers        
           break; 
       } //switch _ctrl     
     
-      break;      
+      break; // BlinkOn 
 
     case BlinkOff:
       // Controllers that support UDC Blink  
       switch (_ctrl) {
+        case KS0073 :            
         case KS0078 :            
-          _function_1 &= ~0x02; // Disable UDC Blink        
-          _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0 (Ext Regs)
+          _function_1 &= ~0x02; // Disable UDC/Icon Blink        
+          _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0/LP (Ext Regs)
 
           _writeCommand(0x20 | _function);          // Function set 0 0 1 DL N RE(0) DH REV (Std Regs)
-          break; // case KS0078 Controller
+          break; // case KS0073, KS0078 Controller
     
         case US2066_3V3 :  
         case SSD1803_3V3 :  
-          _function_1 &= ~0x04; // Disable UDC Blink
+          _function_1 &= ~0x04; // Disable UDC/Icon Blink
           _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N BE RE(1) REV 
                                                     // Select Ext Instr Set
 
           _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
                                                     // Select Std Instr set, Select IS=0
           break; // case SSD1803, US2066          
+ 
+        case PCF2103_3V3 :
+        case PCF2113_3V3 :  
+        case PCF2119_3V3 :       
+          // Disable Icon Blink
+          _writeCommand(0x20 | _function | 0x01);   // Set function, Select Instr Set = 1              
+          _writeCommand(0x08);                      // ICON Conf 0000 1, IM=0 (Char mode), IB=1 (Icon blink), 0 (Instr. Set 1) 
+          _writeCommand(0x20 | _function);          // Set function, Select Instr Set = 0             
+
+          break; 
        
         default:
           //Unsupported feature for other controllers        
           break; 
       } //switch _ctrl     
     
-      break;        
+      break; //BlinkOff
       
     default:
       break;      
@@ -1844,6 +2050,7 @@ void TextLCD_Base::setPower(bool powerOn) {
         wait_ms(10);           // Wait 10ms to ensure powered up             
         break;
 
+      case KS0073:        
       case KS0078:        
       case SSD1803_3V3 :      
 //      case SSD1803_5V :            
@@ -1874,6 +2081,7 @@ void TextLCD_Base::setPower(bool powerOn) {
         _writeCommand(0x13);   // Char mode, DC/DC off              
         break;
         
+      case KS0073:
       case KS0078:
       case SSD1803_3V3 :      
 //      case SSD1803_5V :            
@@ -1922,6 +2130,18 @@ void TextLCD_Base::setOrient(LCDOrient orient){
           _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
                                                     // Select Std Instr set, Select IS=0       
           break;
+
+        case ST7070:      
+          _writeCommand(0x20 | _function | 0x04);   // Set function, 0 0 1 DL, N, EXT=1, x, x (Select Instr Set = 1)
+
+          _writeCommand(0x40 | 0x00);               // COM/SEG directions 0 1 0 0 C1, C2, S1, S2  (Instr Set 1)
+                                                    // C1=1: Com1-8 -> Com8-1;   C2=1: Com9-16 -> Com16-9
+                                                    // S1=1: Seg1-40 -> Seg40-1; S2=1: Seg41-80 -> Seg80-41                                                    
+          wait_ms(5);                               // Wait to ensure completion or ST7070 fails to set Top/Bottom after reset..
+          
+          _writeCommand(0x20 | _function);          // Set function, EXT=0 (Select Instr Set = 0)
+        
+          break; // case ST7070 Controller
           
         default:  
           //Unsupported feature for other controllers
@@ -1952,6 +2172,23 @@ void TextLCD_Base::setOrient(LCDOrient orient){
           _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS=0 Select Instruction Set 0
                                                     // Select Std Instr set, Select IS=0       
           break;
+
+        case ST7070:
+          //Note: this does not result in correct top/bottom view. 
+          //The left and right half of each row are reversed and the addressing of both rows is also incorrect:
+          //Top/bottomline when orientation is flipped:
+          //  0x48...0x4F  0x40...0x47
+          //  0x08...0x0F  0x00...0x07
+          _writeCommand(0x20 | _function | 0x04);   // Set function, 0 0 1 DL N EXT=1 x x (Select Instr Set = 1)
+
+          _writeCommand(0x40 | 0x0F);               // COM/SEG directions 0 1 0 0 C1, C2, S1, S2  (Instr Set 1)
+                                                    // C1=1: Com1-8 -> Com8-1;   C2=1: Com9-16 -> Com16-9
+                                                    // S1=1: Seg1-40 -> Seg40-1; S2=1: Seg41-80 -> Seg80-41                                                    
+          wait_ms(5);                               // Wait to ensure completion or ST7070 fails to set Top/Bottom after reset..
+          
+          _writeCommand(0x20 | _function);          // Set function, EXT=0 (Select Instr Set = 0)
+        
+          break; // case ST7070 Controller
           
         default:  
           //Unsupported feature for other controllers
@@ -1962,7 +2199,6 @@ void TextLCD_Base::setOrient(LCDOrient orient){
       break; // end Bottom
   } // end switch orient
 } // end setOrient()
-
 
 /** Set Big Font
   * setBigFont method is supported by some compatible devices (eg SSD1803, US2066) 
@@ -2080,6 +2316,294 @@ void TextLCD_Base::setBigFont(LCDBigFont lines) {
 
 } // end setBigFont()
 
+
+/** Set Icons
+  *
+  * @param unsigned char idx   The Index of the icon pattern (0..15) for KS0073 and similar controllers
+  *                            and Index (0..31) for PCF2103 and similar controllers  
+  * @param unsigned char data  The bitpattern for the icons (6 lsb for KS0073 bitpattern (5 lsb for KS0078) and 2 msb for blinkmode)       
+  *                            The bitpattern for the PCF2103 icons is 5 lsb (UDC 0..2) and 5 lsb for blinkmode (UDC 4..6)         
+  */
+void TextLCD_Base::setIcon(unsigned char idx, unsigned char data) {
+  // Blinking icons are enabled when a specific controlbit (BE) is set.
+  // The blinking pixels in the icons can be controlled by setting additional bits in the icon bitpattern.
+  // Icons are defined by a byte bitpattern. The P0..P5 form the Icon pattern for KS0073, and P0..P4 for KS0078
+  //     P7 P6 P5 P4 P3 P2 P1 P0 
+  // 0   B1 B0  0  0  1  1  1  0
+  // 1   B1 B0  1  1  0  0  0  1
+  //        .............
+  // 15  B1 B0  1  1  0  0  0  1
+  //
+  // Bit 6 and Bit 7 in the pattern will control the blinking mode when Blink is enabled through BE. 
+  //     B1 B0  Mode
+  //      0  0  No Blinking for this icon row
+  //      0  1  Enabled pixels in P5 will blink
+  //      1  x  Enabled pixels in P0..P5 will blink
+  //
+  // Note: the PCF2103 and PCF2113 use UDCs to set Icons 
+  //   3 x 8 rows x 5 bits = 120 bits Icons for Normal pattern (UDC 0..2) and
+  //   3 x 8 rows x 5 bits = 120 bits Icons for Blink pattern (UDC 4..6) 
+  // Note: the PCF2119 uses UDCs to set Icons 
+  //   4 x 8 rows x 5 bits = 160 bits Icons for Normal pattern (UDC 0..3) and
+  //   4 x 8 rows x 5 bits = 160 bits Icons for Blink pattern (UDC 4..7) 
+  
+  switch (_ctrl) {
+    case KS0073:
+    case KS0078:    
+       _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N RE(1) BE LP 
+                                                 // Select Extended Instruction Set
+       _writeCommand(0x40 | (idx & 0x0F));       // Set Icon Address, mask Address to valid range (Ext Instr Set)
+
+       _writeData(data);                         // Set Icon pattern (Ext Instr Set)
+
+       _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N RE(0) DH REV Select Instruction Set 0
+                                                 // Select Std Instr set, Select IS=0        
+       break; // end KS0073, KS0078
+
+    case ST7032_3V3:
+    case ST7032_5V:
+       _writeCommand(0x20 | _function | 0x01);   // Set function,  0 0 1 DL N F 0 IS=1 Select Instr Set = 1              
+       _writeCommand(0x40 | (idx & 0x0F));       // Set Icon Address, mask Address to valid range (Instr Set 1)
+
+       _writeData(data & 0x1F);                  // Set Icon pattern, no blink support (Instr Set 1) 
+
+       _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N RE(0) DH REV Select Instruction Set 0
+                                                 // Select Std Instr set, Select IS=0        
+       break; // end ST7032
+
+    case ST7036_3V3:
+    case ST7036_5V:
+       _writeCommand(0x20 | _function | 0x01);   // Set function, 0 0 1 DL N DH IS2,IS1 = 01 (Select Instr Set = 1)    
+       _writeCommand(0x40 | (idx & 0x0F));       // Set Icon Address, mask Address to valid range (Instr Set 1)
+
+       _writeData(data & 0x1F);                  // Set Icon pattern, no blink support (Instr Set 1) 
+
+       _writeCommand(0x20 | _function);          // Set function, IS2,IS1 = 00 (Select Instr Set = 0)    
+                                                 // Select Std Instr set, Select IS=0        
+       break; // end ST7036
+
+    case SSD1803_3V3:                  
+//    case SSD1803_5V:                      
+       _writeCommand(0x20 | _function | 0x01);   // Set function, 0 0 1 DL N DH RE(0) IS 
+                                                 // Select Instruction Set 1
+       _writeCommand(0x40 | (idx & 0x0F));       // Set Icon Address, mask Address to valid range (Instr Set = 1)
+       _writeData(data);                         // Set Icon pattern (Instr Set = 1)
+
+       _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS
+                                                 // Select IS=0        
+       break; // end SSD1803      
+
+    case PCF2103_3V3:
+    case PCF2113_3V3:    
+    case PCF2119_3V3:        
+       // Store UDC/Icon pattern for PCF2103 and PCF2113: 
+       //   3 x 8 rows x 5 bits = 120 bits for Normal pattern (UDC 0..2) and
+       //   3 x 8 rows x 5 bits = 120 bits for Blink pattern (UDC 4..6) 
+       // Store UDC/Icon pattern for PCF2119: 
+       //   4 x 8 rows x 5 bits = 160 bits for Normal pattern (UDC 0..3) and
+       //   4 x 8 rows x 5 bits = 160 bits for Blink pattern (UDC 4..7)        
+       _writeCommand(0x40 | (idx & 0x3F));       //Set CG-RAM address, 8 sequential locations needed per UDC
+       _writeData(data);                         // Set Icon pattern (Instr Set = 1)
+       break; // case PCF2103_3V3 Controller
+                 
+    default:
+       break; // end default      
+  } // end switch _ctrl           
+  
+  //Select DD RAM again for current LCD controller and restore the addresspointer
+  int addr = getAddress(_column, _row);
+  _writeCommand(0x80 | addr);  
+         
+} // end setIcon()
+
+/** Clear Icons
+  *
+  * @param  none
+  * @return none
+  */
+  //@TODO Add support for 40x4 dual controller    
+void TextLCD_Base::clrIcon() {
+  // Icons are defined by a byte bitpattern. The P0..P5 form the Icon pattern for KS0073, and P0..P4 for KS0078
+  //     P7 P6 P5 P4 P3 P2 P1 P0 
+  // 0   B1 B0  0  0  0  0  0  0
+  // 1   B1 B0  0  0  0  0  0  0
+  //        .............
+  // 15  B1 B0  0  0  0  0  0  0
+  //
+  // Bit 6 and Bit 7 in the pattern will control the blinking mode when Blink is enabled through BE. 
+  //     B1 B0  Mode
+  //      0  0  No Blinking for this icon row
+  //      0  1  Enabled pixels in P5 will blink
+  //      1  x  Enabled pixels in P0..P5 will blink
+  //
+  // Note: the PCF2103 and PCF2113 use UDCs to set Icons 
+  //   3 x 8 rows x 5 bits = 120 bits Icons for Normal pattern (UDC 0..2) and
+  //   3 x 8 rows x 5 bits = 120 bits Icons for Blink pattern (UDC 4..6)  
+  // Note: the PCF2119 uses UDCs to set Icons 
+  //   4 x 8 rows x 5 bits = 160 bits Icons for Normal pattern (UDC 0..3) and
+  //   4 x 8 rows x 5 bits = 160 bits Icons for Blink pattern (UDC 4..7)  
+  int idx;
+  
+  switch (_ctrl) {
+    case KS0073:              
+    case KS0078:                  
+       _writeCommand(0x20 | _function_1);        // Set function, 0 0 1 DL N RE(1) BE LP 
+                                                 // Select Extended Instruction Set
+       for (idx=0; idx<16; idx++) { 
+         _writeCommand(0x40 | idx);              // Set Icon Address, mask Address to valid range (Ext Instr Set)
+         _writeData(0x00);                       // Clear Icon pattern (Ext Instr Set)
+       }  
+       _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N RE(0) DH REV Select Std Instruction Set
+                                                 // Select Std Instr set        
+       break; // end KS0073, KS0078      
+
+    case ST7032_3V3:
+    case ST7032_5V:
+       _writeCommand(0x20 | _function | 0x01);   // Set function,  0 0 1 DL N F 0 IS=1 Select Instr Set = 1              
+
+       for (idx=0; idx<16; idx++) { 
+         _writeCommand(0x40 | idx);              // Set Icon Address, mask Address to valid range (Instr Set 1)
+         _writeData(0x00);                       // Clear Icon pattern (Instr Set 1)
+       }  
+
+       _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N RE(0) DH REV Select Instruction Set 0
+                                                 // Select Std Instr set, Select IS=0        
+       break; // end ST7032
+
+    case ST7036_3V3:
+    case ST7036_5V:
+       _writeCommand(0x20 | _function | 0x01);   // Set function, 0 0 1 DL N DH IS2,IS1 = 01 (Select Instr Set = 1)    
+
+       for (idx=0; idx<16; idx++) { 
+         _writeCommand(0x40 | idx);              // Set Icon Address, mask Address to valid range (Instr Set 1)
+         _writeData(0x00);                       // Clear Icon pattern (Instr Set 1)
+       }  
+
+       _writeCommand(0x20 | _function);          // Set function, IS2,IS1 = 00 (Select Instr Set = 0)    
+                                                 // Select Std Instr set, Select IS=0        
+       break; // end ST7036
+
+    case SSD1803_3V3:                  
+//    case SSD1803_5V:                      
+       _writeCommand(0x20 | _function | 0x01);   // Set function, 0 0 1 DL N DH RE(0) IS 
+                                                 // Select Instruction Set 1
+       for (idx=0; idx<16; idx++) { 
+         _writeCommand(0x40 | idx);              // Set Icon Address, mask Address to valid range (Ext Instr Set)
+         _writeData(0x00);                       // Clear Icon pattern (Ext Instr Set)
+       }  
+       _writeCommand(0x20 | _function);          // Set function, 0 0 1 DL N DH RE(0) IS
+                                                 // Select IS=0        
+       break; // end SSD1803      
+
+     case PCF2103_3V3:
+     case PCF2113_3V3:         
+       // PCF2103 and PCF2113 use part of the UDC RAM to control Icons   
+       // Select CG RAM
+
+       _writeCommand(0x40 | (0 * 8)); //Set CG-RAM address, 8 sequential locations needed per UDC
+       // Store UDC/Icon pattern: 
+       //   3 x 8 rows x 5 bits = 120 bits for Normal pattern (UDC 0..2) and
+       for (int i=0; i<(3 * 8); i++) {
+//       _writeData(0x1F);  // All On
+         _writeData(0x00);  // All Off            
+       }
+
+       _writeCommand(0x40 | (4 * 8)); //Set CG-RAM address, 8 sequential locations needed per UDC
+       //   3 x 8 rows x 5 bits = 120 bits for Blink pattern (UDC 4..6) 
+       for (int i=0; i<(3 * 8); i++) {
+//       _writeData(0x1F);  // All On
+         _writeData(0x00);  // All Off            
+       }
+       break; // case PCF2103_3V3 Controller
+
+     case PCF2119_3V3:              
+       // PCF2119 uses part of the UDC RAM to control Icons   
+       // Select CG RAM
+
+       _writeCommand(0x40 | (0 * 8)); //Set CG-RAM address, 8 sequential locations needed per UDC
+       // Store UDC/Icon pattern: 
+       //   4 x 8 rows x 5 bits = 160 bits for Normal pattern (UDC 0..3) and
+       for (int i=0; i<(4 * 8); i++) {
+//       _writeData(0x1F);  // All On
+         _writeData(0x00);  // All Off            
+       }
+
+       _writeCommand(0x40 | (4 * 8)); //Set CG-RAM address, 8 sequential locations needed per UDC
+       //   4 x 8 rows x 5 bits = 160 bits for Blink pattern (UDC 4..7) 
+       for (int i=0; i<(4 * 8); i++) {
+//       _writeData(0x1F);  // All On
+         _writeData(0x00);  // All Off            
+       }
+       break; // case PCF2119_3V3 Controller
+
+    default:
+       break; // end default      
+  } // end switch _ctrl           
+  
+  //Select DD RAM again for current LCD controller and restore the addresspointer
+  int addr = getAddress(_column, _row);
+  _writeCommand(0x80 | addr);
+} //end clrIcon()
+
+
+/** Set Invert
+  * setInvert method is supported by some compatible devices (eg KS0073) to swap between black and white 
+  *
+  * @param bool invertOn  Invert on/off   
+  * @return none
+  */
+//@TODO Add support for 40x4 dual controller  
+void TextLCD_Base::setInvert(bool invertOn) {
+  
+  if (invertOn) {
+    // Controllers that support Invert
+    switch (_ctrl) {   
+      case KS0073:        
+      case KS0078:        
+        _function = _function | 0x01;                                  // Enable Invert
+        _writeCommand(0x20 | _function);                               // Activate Invert (Std Instr Set)
+        break;
+      case SSD1803_3V3 :      
+//      case SSD1803_5V :                 
+      case US2066_3V3:
+//      case USS2066_5V:
+        _function_1 = _function_1 | 0x01;                              // Enable Invert 
+                                                                       // Set function, 0 0 1 DL N BE RE(1) REV  (SSD1803)
+                                                                       // Set function, 0 0 1 X  N BE RE(1) REV  (US2066)    
+        _writeCommand(0x20 | _function_1);                             // Activate Invert (Ext Instr Set)
+        _writeCommand(0x20 | _function);                               // Return to Std Instr Set                            
+        break;
+      default:  
+        //Unsupported feature for other controllers
+        break;              
+    } // end switch  
+  }  
+  else {
+    // Controllers that support Invert
+    switch (_ctrl) {    
+      case KS0073:
+      case KS0078:
+        _function = _function & ~0x01;                                 // Disable Invert
+        _writeCommand(0x20 | _function);                               // Disable Invert (Std Instr Set)
+        break;
+      case SSD1803_3V3 :      
+//      case SSD1803_5V :                 
+      case US2066_3V3:
+//      case USS2066_5V:
+        _function_1 = _function_1 & ~0x01;                             // Disable Invert 
+                                                                       // Set function, 0 0 1 DL N BE RE(1) REV  (SSD1803)
+                                                                       // Set function, 0 0 1 X  N BE RE(1) REV  (US2066)                                                                                                                                              
+        _writeCommand(0x20 | _function_1);                             // Activate Invert (Ext Instr Set)
+        _writeCommand(0x20 | _function);                               // Return to Std Instr Set                            
+        break;
+
+      default:  
+        //Unsupported feature for other controllers
+        break;              
+    } // end switch  
+  }
+} // end setInvert()
+
 //--------- End TextLCD_Base -----------
 
 
@@ -2133,7 +2657,6 @@ TextLCD::~TextLCD() {
    if (_bl != NULL) {delete _bl;}  // BL pin
    if (_e2 != NULL) {delete _e2;}  // E2 pin
 }
-
 
 /** Set E pin (or E2 pin)
   * Used for mbed pins, I2C bus expander or SPI shiftregister
@@ -2427,12 +2950,11 @@ TextLCD_I2C_N::TextLCD_I2C_N(I2C *i2c, char deviceAddress, LCDType type, PinName
   
   //Sanity check
   if (_ctrl & LCD_C_I2C) {
-    _init();      
+    _init(_LCD_DL_8);  // Set Datalength to 8 bit for all native serial interfaces      
   }
   else {
     error("Error: LCD Controller type does not support native I2C interface\n\r");           
   }
-
 }
 
 TextLCD_I2C_N::~TextLCD_I2C_N() {
@@ -2567,7 +3089,7 @@ void TextLCD_SPI::_setEnable(bool value) {
 }    
 
 // Set RS pin
-// Used for mbed pins, I2C bus expander or SPI shiftregister
+// Used for mbed pins, I2C bus expander or SPI shiftregister and SPI_N
 void TextLCD_SPI::_setRS(bool value) {
 
   if (value) {
@@ -2677,11 +3199,18 @@ TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, Pin
   // Init CS
   _cs = 1;
 
+  // Setup the spi for 8 bit data, high steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate    
+//  _spi->format(8,3);  
+//  _spi->frequency(1000000);    
+  
   // Setup the spi for 8 bit data, low steady state clock,
   // rising edge capture, with a 500KHz or 1MHz clock rate  
   _spi->format(8,0);
+//  _spi->frequency(300000);    
+//  _spi->frequency(500000); 
   _spi->frequency(1000000);    
-  
+    
   // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
   if (bl != NC) {
     _bl = new DigitalOut(bl);   //Construct new pin 
@@ -2694,7 +3223,8 @@ TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, Pin
 
   //Sanity check
   if (_ctrl & LCD_C_SPI4) {
-    _init();      
+    _init(_LCD_DL_8);   // Set Datalength to 8 bit for all native serial interfaces
+                        // ST7070 must set datalength to 8 bits!
   }
   else {
     error("Error: LCD Controller type does not support native SPI4 interface\n\r");           
@@ -2710,7 +3240,7 @@ void TextLCD_SPI_N::_setEnable(bool value) {
 }    
 
 // Set RS pin
-// Used for mbed pins, I2C bus expander or SPI shiftregister
+// Used for mbed pins, I2C bus expander or SPI shiftregister, SPI_N
 void TextLCD_SPI_N::_setRS(bool value) {
     _rs = value;
 }    
@@ -2736,6 +3266,141 @@ void TextLCD_SPI_N::_writeByte(int value) {
 }
 #endif /* Native SPI bus     */  
 //-------- End TextLCD_SPI_N ------------
+
+
+//-------- Start TextLCD_SPI_N_3_8 --------
+#if(LCD_SPI_N_3_8 == 1) /* Native SPI bus     */
+
+ /** Create a TextLCD interface using a controller with a native SPI3 8 bits interface
+   * This mode is supported by ST7070. Note that implementation in TexTLCD is not very efficient due to
+   * structure of the TextLCD library: each databyte is written separately and requires a separate 'count command' set to 1 byte.
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param bl              Backlight control line (optional, default = NC)  
+   * @param ctrl            LCD controller (default = ST7070) 
+   */       
+TextLCD_SPI_N_3_8::TextLCD_SPI_N_3_8(SPI *spi, PinName cs, LCDType type, PinName bl, LCDCtrl ctrl) :
+                                     TextLCD_Base(type, ctrl), 
+                                     _spi(spi),        
+                                     _cs(cs) {      
+
+  // Init CS
+  _cs = 1;
+
+  // Setup the spi for 8 bit data, high steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+//  _spi->format(8,3);  
+//  _spi->frequency(300000);    
+//  _spi->frequency(1000000);    
+
+  // Setup the spi for 8 bit data, low steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+  _spi->format(8,0);
+//  _spi->frequency(300000);    
+//  _spi->frequency(500000); 
+  _spi->frequency(1000000);    
+  
+  
+  // The hardware Backlight pin is optional. Test and make sure whether it exists or not to prevent illegal access.
+  if (bl != NC) {
+    _bl = new DigitalOut(bl);   //Construct new pin 
+    _bl->write(0);              //Deactivate    
+  }
+  else {
+    // No Hardware Backlight pin       
+    _bl = NULL;                 //Construct dummy pin     
+  }  
+
+  //Sanity check
+  if (_ctrl & LCD_C_SPI3_8) { 
+    _init(_LCD_DL_8);  // Set Datalength to 8 bit for all native serial interfaces   
+  }
+  else {
+    error("Error: LCD Controller type does not support native SPI3 8 bits interface\n\r");           
+  }
+}
+
+TextLCD_SPI_N_3_8::~TextLCD_SPI_N_3_8() {
+   if (_bl != NULL) {delete _bl;}  // BL pin
+}
+
+// Not used in this mode
+void TextLCD_SPI_N_3_8::_setEnable(bool value) {
+}    
+
+// Used for mbed pins, I2C bus expander or SPI shiftregister, SPI_N
+//   RS=1 means that next byte is data, RS=0 means that next byte is command
+void TextLCD_SPI_N_3_8::_setRS(bool value) {
+  
+  if (value) {
+    _controlbyte = 0x01; // Next byte is data, No more control bytes will follow
+  }
+  else {
+    _controlbyte = 0x00; // Next byte is command, No more control bytes will follow     
+  }
+}      
+  
+// Set BL pin
+void TextLCD_SPI_N_3_8::_setBL(bool value) {
+    if (_bl) {
+        _bl->write(value);   
+    }    
+}    
+
+// Not used in this mode
+void TextLCD_SPI_N_3_8::_setData(int value) {
+}    
+
+// Write a byte using SPI3 8 bits mode (ST7070)
+void TextLCD_SPI_N_3_8::_writeByte(int value) {
+    
+  if (_controlbyte == 0x00) { // Byte is command 
+    _cs = 0;
+    wait_us(1);
+    _spi->write(value);
+    wait_us(1);
+    _cs = 1;
+  }  
+  else {                      // Byte is data 
+    // Select Extended Instr Set
+    _cs = 0;
+    wait_us(1);
+    _spi->write(0x20 | _function | 0x04);   // Set function, 0 0 1 DL N EXT=1 x x (Select Instr Set = 1));
+    wait_us(1);
+    _cs = 1;     
+
+    wait_us(40);                            // Wait until command has finished...    
+        
+    // Set Count to 1 databyte
+    _cs = 0;
+    wait_us(1);    
+    _spi->write(0x80);                      // Set display data length, 1 L6 L5 L4 L3 L2 L1 L0 (Instr Set = 1)
+    wait_us(1);
+    _cs = 1;
+
+    wait_us(40);    
+                
+    // Write 1 databyte     
+    _cs = 0;
+    wait_us(1);    
+    _spi->write(value);                     // Write data (Instr Set = 1)
+    wait_us(1);
+    _cs = 1;         
+
+    wait_us(40);    
+        
+    // Select Standard Instr Set    
+    _cs = 0;
+    wait_us(1);    
+    _spi->write(0x20 | _function);          // Set function, 0 0 1 DL N EXT=0 x x (Select Instr Set = 0));
+    wait_us(1);
+    _cs = 1;     
+  }  
+}
+#endif /* Native SPI bus     */  
+//------- End TextLCD_SPI_N_3_8 -----------
 
 
 //-------- Start TextLCD_SPI_N_3_9 --------
@@ -2774,8 +3439,8 @@ TextLCD_SPI_N_3_9::TextLCD_SPI_N_3_9(SPI *spi, PinName cs, LCDType type, PinName
   }  
 
   //Sanity check
-  if (_ctrl & LCD_C_SPI3_9) {
-    _init();      
+  if (_ctrl & LCD_C_SPI3_9) { 
+    _init(_LCD_DL_8);  // Set Datalength to 8 bit for all native serial interfaces   
   }
   else {
     error("Error: LCD Controller type does not support native SPI3 9 bits interface\n\r");           
@@ -2867,7 +3532,7 @@ TextLCD_SPI_N_3_10::TextLCD_SPI_N_3_10(SPI *spi, PinName cs, LCDType type, PinNa
 
   //Sanity check
   if (_ctrl & LCD_C_SPI3_10) {
-    _init();      
+     _init(_LCD_DL_8);  // Set Datalength to 8 bit for all native serial interfaces            
   }
   else {
     error("Error: LCD Controller type does not support native SPI3 10 bits interface\n\r");           
@@ -2926,7 +3591,6 @@ void TextLCD_SPI_N_3_10::_writeByte(int value) {
 
 //------- Start TextLCD_SPI_N_3_16 --------
 #if(LCD_SPI_N_3_16 == 1) /* Native SPI bus     */
-//Code checked out on logic analyser. Not yet tested on hardware..
 
  /** Create a TextLCD interface using a controller with a native SPI3 16 bits interface
    *
@@ -2961,7 +3625,7 @@ TextLCD_SPI_N_3_16::TextLCD_SPI_N_3_16(SPI *spi, PinName cs, LCDType type, PinNa
 
   //Sanity check
   if (_ctrl & LCD_C_SPI3_16) {
-    _init();      
+     _init(_LCD_DL_8);  // Set Datalength to 8 bit for all native serial interfaces            
   }
   else {
     error("Error: LCD Controller type does not support native SPI3 16 bits interface\n\r");           
@@ -3059,7 +3723,7 @@ TextLCD_SPI_N_3_24::TextLCD_SPI_N_3_24(SPI *spi, PinName cs, LCDType type, PinNa
 
   //Sanity check
   if (_ctrl & LCD_C_SPI3_24) {
-    _init();      
+    _init(_LCD_DL_8);  // Set Datalength to 8 bit for all native serial interfaces      
   }
   else {
     error("Error: LCD Controller type does not support native SPI3 24 bits interface\n\r");           

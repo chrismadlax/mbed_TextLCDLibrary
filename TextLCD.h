@@ -16,6 +16,7 @@
  *               2014, v14: WH, Added support for PT6314 (VFD), added setOrient() method for supported devices (eg SSD1803, US2066), added Double Height lines for supported devices, 
  *                              added 16 UDCs for supported devices (eg PCF2103), moved UDC defines to TextLCD_UDC file, added TextLCD_Config.h for feature and footprint settings.
  *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
+ *               2014, v16: WH, Added ST7070 and KS0073 support, added setIcon(), clrIcon() and setInvert() method for supported devices  
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -116,12 +117,13 @@
 // Interface encoded in b31..b24
 #define LCD_C_BUS_MSK  0xFF000000
 #define LCD_C_PAR      0x01000000  /*Parallel 4 or 8 bit data, E pin, RS pin, RW=GND            */
-#define LCD_C_SPI3_9   0x02000000  /*SPI 3 line (MOSI, SCL, CS pins),  9 bits (RS + 8 Data)     */
-#define LCD_C_SPI3_10  0x04000000  /*SPI 3 line (MOSI, SCL, CS pins), 10 bits (RS, RW + 8 Data) */
-#define LCD_C_SPI3_16  0x08000000  /*SPI 3 line (MOSI, SCL, CS pins), 16 bits (RS, RW + 8 Data) */
-#define LCD_C_SPI3_24  0x10000000  /*SPI 3 line (MOSI, SCL, CS pins), 24 bits (RS, RW + 8 Data) */
-#define LCD_C_SPI4     0x20000000  /*SPI 4 line (MOSI, SCL, CS, RS pin), RS pin + 8 Data        */
-#define LCD_C_I2C      0x40000000  /*I2C (SDA, SCL pin), 8 control bits (Co, RS, RW) + 8 Data   */
+#define LCD_C_SPI3_8   0x02000000  /*SPI 3 line (MOSI, SCL, CS pins),  8 bits (Count Command initiates Data transfer) */
+#define LCD_C_SPI3_9   0x04000000  /*SPI 3 line (MOSI, SCL, CS pins),  9 bits (RS + 8 Data)     */
+#define LCD_C_SPI3_10  0x08000000  /*SPI 3 line (MOSI, SCL, CS pins), 10 bits (RS, RW + 8 Data) */
+#define LCD_C_SPI3_16  0x10000000  /*SPI 3 line (MOSI, SCL, CS pins), 16 bits (RS, RW + 8 Data) */
+#define LCD_C_SPI3_24  0x20000000  /*SPI 3 line (MOSI, SCL, CS pins), 24 bits (RS, RW + 8 Data) */
+#define LCD_C_SPI4     0x40000000  /*SPI 4 line (MOSI, SCL, CS, RS pin), RS pin + 8 Data        */
+#define LCD_C_I2C      0x80000000  /*I2C (SDA, SCL pin), 8 control bits (Co, RS, RW) + 8 Data   */
 // Features encoded in b23..b16
 #define LCD_C_FTR_MSK  0x00FF0000 
 #define LCD_C_BST      0x00010000  /*Booster             */
@@ -157,11 +159,11 @@ public:
         LCD8x2B    = (LCD_T_D | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel (actually 16x1) */                  
         LCD12x1    = (LCD_T_A | LCD_T_C12 | LCD_T_R1),    /**< 12x1 LCD panel */                          
         LCD12x2    = (LCD_T_A | LCD_T_C12 | LCD_T_R2),    /**< 12x2 LCD panel */                          
-        LCD12x3D   = (LCD_T_D | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode PCF21XX */                                  
-        LCD12x3D1  = (LCD_T_D1 | LCD_T_C12 | LCD_T_R3),   /**< 12x3 LCD panel, special mode PCF21XX */                                          
+        LCD12x3D   = (LCD_T_D | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */                                  
+        LCD12x3D1  = (LCD_T_D1 | LCD_T_C12 | LCD_T_R3),   /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */                                          
 //        LCD12x3G   = (LCD_T_G | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode ST7036 */                                      
         LCD12x4    = (LCD_T_A | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel */                  
-        LCD12x4D   = (LCD_T_B | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel, special mode PCF21XX */                                          
+        LCD12x4D   = (LCD_T_B | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel, special mode PCF21XX, KS0073 */                                          
         LCD16x1    = (LCD_T_A | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel */                  
         LCD16x1C   = (LCD_T_C | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel (actually 8x2) */          
         LCD16x2    = (LCD_T_A | LCD_T_C16 | LCD_T_R2),    /**< 16x2 LCD panel (default) */
@@ -203,7 +205,7 @@ public:
         ST7036_5V   =  3 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_BST | LCD_C_CTR),               /**<  ST7036  5V no Booster, 4/8 bit, SPI4, I2C    */   
         ST7032_3V3  =  4 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_BST | LCD_C_CTR),               /**<  ST7032  3V3 with Booster, 4/8 bit, SPI4, I2C */   
         ST7032_5V   =  5 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_CTR),                           /**<  ST7032  5V no Booster, 4/8 bit, SPI4, I2C    */           
-        KS0078      =  6 | (LCD_C_PAR | LCD_C_SPI3_24),                                                   /**<  KS0078  24x4 support, 4/8 bit, SPI3          */                   
+        KS0078      =  6 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_PDN),                                       /**<  KS0078  24x4 support, 4/8 bit, SPI3          */                   
         PCF2103_3V3 =  7 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2103 3V3 no Booster, 4/8 bit, I2C         */                                   
         PCF2113_3V3 =  8 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                           /**<  PCF2113 3V3 with Booster, 4/8 bit, I2C       */                           
         PCF2116_3V3 =  9 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST),                                       /**<  PCF2116 3V3 with Booster, 4/8 bit, I2C       */                           
@@ -215,8 +217,10 @@ public:
 //        SSD1803_5V  = 15 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
         US2066_3V3  = 16 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_CTR | LCD_C_PDN),               /**<  US2066/SSD1311 3V3, 4/8 bit, I2C, SPI3 */
         PT6314      = 17 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR),                                       /**<  PT6314  VFD, 4/8 bit, SPI3                   */
-        AC780       = 18 | (LCD_C_PAR | LCD_C_SPI4 | LCD_C_I2C | LCD_C_PDN)                               /**<  AC780/KS0066i 4/8 bit, SPI, I2C              */
-//        WS0012      = 19 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_I2C | LCD_C_PDN)                            /**<  WS0012 4/8 bit, SPI, I2C                     */
+        AC780       = 18 | (LCD_C_PAR | LCD_C_SPI4 | LCD_C_I2C | LCD_C_PDN),                              /**<  AC780/KS0066i 4/8 bit, SPI, I2C              */
+//        WS0012      = 19 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_I2C | LCD_C_PDN),                           /**<  WS0012 4/8 bit, SPI, I2C                     */
+        ST7070      = 20 | (LCD_C_PAR | LCD_C_SPI3_8 | LCD_C_SPI4),                                       /**<  ST7070 4/8 bit, SPI3                         */
+        KS0073      = 21 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_PDN)                                        /**<  KS0073 4/8 bit, SPI3                         */
     };
 
 
@@ -304,7 +308,7 @@ public:
      *
      * @param column  The horizontal position from the left, indexed from 0
      * @param row     The vertical position from the top, indexed from 0
-     * @param return  The memoryaddress of screen column and row location
+     * @return        The memoryaddress of screen column and row location
      */
     int  getAddress(int column, int row);     
     
@@ -321,13 +325,13 @@ public:
 
     /** Return the number of rows
      *
-     * @param return  The number of rows
+     * @return  The number of rows
      */
     int rows();
     
     /** Return the number of columns
      *
-     * @param return  The number of columns
+     * @return  The number of columns
      */  
     int columns();  
 
@@ -356,7 +360,7 @@ public:
      */
     void setUDC(unsigned char c, char *udc_data);
 
-    /** Set UDC Blink
+    /** Set UDC Blink and Icon blink
      * setUDCBlink method is supported by some compatible devices (eg SSD1803) 
      *
      * @param blinkMode The Blink mode (BlinkOff, BlinkOn)
@@ -397,11 +401,32 @@ public:
      */
     void setBigFont(LCDBigFont lines);
 
-//test
-//    void _initCtrl();    
-//    int _column;
-//    int _row;
-    
+    /** Set Icons
+    *
+    * @param unsigned char idx   The Index of the icon pattern (0..15) for KS0073 and similar controllers
+    *                            and Index (0..31) for PCF2103 and similar controllers  
+    * @param unsigned char data  The bitpattern for the icons (6 lsb for KS0073 bitpattern (5 lsb for KS0078) and 2 msb for blinkmode)       
+    *                            The bitpattern for the PCF2103 icons is 5 lsb (UDC 0..2) and 5 lsb for blinkmode (UDC 4..6)         
+    */    
+    void setIcon(unsigned char idx, unsigned char data);
+
+    /** Clear Icons
+     *
+     * @param  none
+     * @return none
+     */
+    //@TODO Add support for 40x4 dual controller       
+    void clrIcon();
+
+   /** Set Invert
+     * setInvert method is supported by some compatible devices (eg KS0073) to swap between black and white 
+     *
+     * @param bool invertOn  Invert on/off   
+     * @return none
+     */
+   //@TODO Add support for 40x4 dual controller  
+   void setInvert(bool invertOn);
+
 protected:
 
    /** LCD controller select, mainly used for LCD40x4
@@ -409,6 +434,12 @@ protected:
     enum _LCDCtrl_Idx {
         _LCDCtrl_0,  /*<  Primary */    
         _LCDCtrl_1,  /*<  Secondary */            
+    };
+
+    /** LCD Datalength control to select between 4 or 8 bit data/commands, used for native Serial interface */
+    enum _LCDDatalength {
+        _LCD_DL_4 = 0x00,  /**<  Datalength 4 bit */    
+        _LCD_DL_8 = 0x10   /**<  Datalength 8 bit */            
     };
 
     /** Create a TextLCD_Base interface
@@ -423,13 +454,21 @@ protected:
     virtual int _putc(int value);
     virtual int _getc();
 
-/** Low level method for LCD controller
+/** Medium level initialisation method for LCD controller
+  *  @param _LCDDatalength dl sets the datalength of data/commands
+  *  @return none
   */
-    void _init();    
+    void _init(_LCDDatalength dl = _LCD_DL_4);     
 
 /** Low level initialisation method for LCD controller
+  *   Set number of lines, fonttype, no cursor etc
+  *   The controller is accessed in 4-bit parallel mode either directly via mbed pins or through I2C or SPI expander.
+  *   Some controllers also support native I2C or SPI interfaces. 
+  *
+  *  @param _LCDDatalength dl sets the 4 or 8 bit datalength of data/commands. Required for some native serial modes.
+  *  @return none  
   */
-    void _initCtrl();    
+    void _initCtrl(_LCDDatalength dl = _LCD_DL_4);    
 
 /** Low level character address set method
   */  
@@ -509,13 +548,12 @@ protected:
     int _row;
     LCDCursor _currentCursor; 
 
-// Function mode saved to allow switch between Instruction sets after initialisation time 
+// Function modes saved to allow switch between Instruction sets after initialisation time 
+    int _function, _function_1, _function_x;
+
 // Icon, Booster mode and contrast saved to allow contrast change at later time
 // Only available for controllers with added features
-    int _function, _function_1, _function_x;
-    int _icon_power;
-    int _contrast;    
-       
+    int _icon_power, _contrast;          
 };
 
 //--------- End TextLCD_Base -----------
@@ -760,6 +798,67 @@ private:
 //---------- End TextLCD_SPI_N ------------
 
 
+//-------- Start TextLCD_SPI_N_3_8 --------
+#if(LCD_SPI_N_3_8 == 1) /* Native SPI bus     */
+
+class TextLCD_SPI_N_3_8 : public TextLCD_Base {    
+public:
+ /** Create a TextLCD interface using a controller with a native SPI3 8 bits interface
+   * This mode is supported by ST7070. Note that implementation in TexTLCD is not very efficient due to
+   * structure of the TextLCD library: each databyte is written separately and requires a separate 'count command' set to 1 byte.
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param bl              Backlight control line (optional, default = NC)  
+   * @param ctrl            LCD controller (default = ST7070) 
+   */       
+  TextLCD_SPI_N_3_8(SPI *spi, PinName cs, LCDType type = LCD16x2, PinName bl = NC, LCDCtrl ctrl = ST7070);
+
+  virtual ~TextLCD_SPI_N_3_8(void);
+
+private:
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the Enable pin.
+  */
+    virtual void _setEnable(bool value);
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the RS pin (0 = Command, 1 = Data).
+  */   
+    virtual void _setRS(bool value);  
+
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the BL pin (0 = Backlight Off, 1 = Backlight On).
+  */   
+    virtual void _setBL(bool value);
+    
+/** Implementation of pure Virtual Low level writes to LCD Bus (serial native)
+  * Set the databus value (4 bit).
+  */   
+    virtual void _setData(int value);
+
+/** Low level writes to LCD serial bus only (serial native)
+  */
+    virtual void _writeByte(int value);
+   
+// SPI bus        
+    SPI *_spi;
+    DigitalOut _cs;    
+
+// controlbyte to select between data and command. Internal value for serial bus only
+    char _controlbyte;   
+    
+//Backlight    
+    DigitalOut *_bl;
+};
+ 
+#endif /* Native SPI bus     */  
+//------- End TextLCD_SPI_N_3_8 -----------
+
+
+
 //------- Start TextLCD_SPI_N_3_9 ---------
 #if(LCD_SPI_N_3_9 == 1) /* Native SPI bus     */
 //Code checked out on logic analyser. Not yet tested on hardware..
@@ -811,7 +910,6 @@ private:
 // SPI bus        
     SPI *_spi;
     DigitalOut _cs;    
-
    
 // controlbyte to select between data and command. Internal value for serial bus only
     char _controlbyte;   
@@ -873,8 +971,7 @@ private:
 // SPI bus        
     SPI *_spi;
     DigitalOut _cs;    
-    
-   
+       
 // controlbyte to select between data and command. Internal value for serial bus only
     char _controlbyte;   
 
