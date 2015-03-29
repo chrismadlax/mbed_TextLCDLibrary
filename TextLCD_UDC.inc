@@ -1,4 +1,4 @@
-/* mbed TextLCD Library, for a 4-bit LCD based on HD44780
+/* mbed TextLCD Library, for LCDs based on HD44780 controllers
  * Copyright (c) 2014, WH
  *               2014, v01: WH, Extracted from TextLCD.cpp as of v14
  *

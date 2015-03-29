@@ -1,4 +1,4 @@
-/* mbed TextLCD Library, for a 4-bit LCD based on HD44780
+/* mbed TextLCD Library, for LCDs based on HD44780 controllers
  * Copyright (c) 2007-2010, sford, http://mbed.org
  *               2013, v01: WH, Added LCD types, fixed LCD address issues, added Cursor and UDCs 
  *               2013, v02: WH, Added I2C and SPI bus interfaces  
@@ -17,6 +17,7 @@
  *                              added 16 UDCs for supported devices (eg PCF2103), moved UDC defines to TextLCD_UDC file, added TextLCD_Config.h for feature and footprint settings.
  *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
  *               2014, v16: WH, Added ST7070 and KS0073 support, added setIcon(), clrIcon() and setInvert() method for supported devices 
+ *               2015, v17: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alternative fonttables (eg PCF21XX), Added ST7066_ACM controller for ACM1602 module 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -57,6 +58,9 @@ TextLCD_Base::TextLCD_Base(LCDType type, LCDCtrl ctrl) : _type(type), _ctrl(ctrl
 
   // Addressing mode encoded in b19..b16  
   _addr_mode = _type & LCD_T_ADR_MSK;
+  
+  // Font table, encoded in LCDCtrl  
+  _font = _type & LCD_C_FNT_MSK;
 }
 
 /**  Init the LCD Controller(s)
@@ -100,33 +104,35 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
     
     wait_ms(20);         // Wait 20ms to ensure powered up
 
-    // The Controller could be in 8 bit mode (power-on reset) or in 4 bit mode (warm reboot) at this point.
-    // Follow this procedure to make sure the Controller enters the correct state. The hardware interface
-    // between the uP and the LCD can only write the 4 most significant bits (Most Significant Nibble, MSN).
-    // In 4 bit mode the LCD expects the MSN first, followed by the LSN.
-    //
-    //    Current state:               8 bit mode                |  4 bit mode, MSN is next      | 4 bit mode, LSN is next          
-                         //-------------------------------------------------------------------------------------------------                          
-    _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, |   set 8 bit mode (MSN),       |    set dummy LSN, 
-                         //  remains in 8 bit mode               |    change to 8 bit mode       |  remains in 4 bit mode
-    wait_ms(15);         //                           
+    if (dl == _LCD_DL_4) {
+      // The Controller could be in 8 bit mode (power-on reset) or in 4 bit mode (warm reboot) at this point.
+      // Follow this procedure to make sure the Controller enters the correct state. The hardware interface
+      // between the uP and the LCD can only write the 4 most significant bits (Most Significant Nibble, MSN).
+      // In 4 bit mode the LCD expects the MSN first, followed by the LSN.
+      //
+      //    Current state:               8 bit mode                |  4 bit mode, MSN is next      | 4 bit mode, LSN is next          
+                           //-------------------------------------------------------------------------------------------------                          
+      _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, |   set 8 bit mode (MSN),       |    set dummy LSN, 
+                           //  remains in 8 bit mode               |    change to 8 bit mode       |  remains in 4 bit mode
+      wait_ms(15);         //                           
+     
+      _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set 8bit mode (MSN), 
+                           //  remains in 8 bit mode               |   remains in 8 bit mode       |  remains in 4 bit mode
+      wait_ms(15);         // 
     
-    _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set 8bit mode (MSN), 
-                         //  remains in 8 bit mode               |   remains in 8 bit mode       |  remains in 4 bit mode
-    wait_ms(15);         // 
-    
-    _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set dummy LSN, 
-                         //  remains in 8 bit mode               |   remains in 8 bit mode       |  change to 8 bit mode
-    wait_ms(15);         // 
+      _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set dummy LSN, 
+                           //  remains in 8 bit mode               |   remains in 8 bit mode       |  change to 8 bit mode
+      wait_ms(15);         // 
 
-    // Controller is now in 8 bit mode
+      // Controller is now in 8 bit mode
 
-    _writeNibble(0x2);   // Change to 4-bit mode (MSN), the LSN is undefined dummy
-    wait_us(40);         // most instructions take 40us
+      _writeNibble(0x2);   // Change to 4-bit mode (MSN), the LSN is undefined dummy
+      wait_us(40);         // most instructions take 40us
 
-    // Display is now in 4-bit mode
-    // Note: 4/8 bit mode is ignored for most native SPI and I2C devices. They dont use the parallel bus.
-    //       However, _writeNibble() method is void anyway for native SPI and I2C devices.
+      // Controller is now in 4-bit mode
+      // Note: 4/8 bit mode is ignored for most native SPI and I2C devices. They dont use the parallel bus.
+      //       However, _writeNibble() method is void anyway for native SPI and I2C devices.
+    }      
    
     // Device specific initialisations: DC/DC converter to generate VLCD or VLED, number of lines etc
     switch (_ctrl) {
@@ -1193,6 +1199,7 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
           _writeCommand(0x20 | _function | ((~_contrast) >> 4));        // Invert and shift to use 2 MSBs     
           break; // case PT6314 Controller (VFD)
            
+        case ST7066_ACM:                                                // ST7066 4/8 bit, I2C on ACM1602 using a PIC        
         default:
           // Devices fully compatible to HD44780 that do not use any DC/DC Voltage converters but external VLCD, no icons etc
 
@@ -1329,9 +1336,12 @@ int TextLCD_Base::_putc(int value) {
       }      
     }
     else {
-      //Character to write      
-      _writeData(value); 
-              
+      //Character to write
+#if (LCD_DEFAULT_FONT == 1)      
+      _writeData(value);
+#else
+      _writeData(ASCII_2_LCD(value));
+#endif              
       //Update Cursor
       _column++;
       if (_column >= columns()) {
@@ -1354,6 +1364,30 @@ int TextLCD_Base::_putc(int value) {
 // get a single character (Stream implementation)
 int TextLCD_Base::_getc() {
     return -1;
+}
+
+/** Convert ASCII character code to the LCD fonttable code
+  *
+  * @param c The character to write to the display
+  * @return The character code for the specific fonttable of the controller
+  */
+int TextLCD_Base::ASCII_2_LCD (int c) {
+    
+//LCD_C_FT0 is default for HD44780 and compatible series
+    if (_font == LCD_C_FT0) return c;
+
+//LCD_C_FT1 for PCF21XXC series    
+//Used code from Suga koubou library for PCF2119
+    if (((c >= ' ') && (c <= '?')) || ((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z'))) {
+        c |= 0x80;
+    } else if (c >= 0xf0 && c <= 0xff) {
+        c &= 0x0f;
+    }
+    return c;
+
+//LCD_C_FT2 ...
+//@TODO add more, eg cyrillic 
+//@TODO add method to switch between fonts for controllers that support this
 }
 
 
@@ -1383,17 +1417,15 @@ int TextLCD_Base::printf(const char* text, ...) {
 #endif    
 
 
-
 // Write a nibble using the 4-bit interface
 void TextLCD_Base::_writeNibble(int value) {
 
 // Enable is Low
     this->_setEnable(true);        
-    this->_setData(value & 0x0F);   // Low nibble
+    this->_setData(value);        // Low nibble
     wait_us(1); // Data setup time        
     this->_setEnable(false);    
     wait_us(1); // Datahold time
-
 // Enable is Low
 }
 
@@ -1408,7 +1440,7 @@ void TextLCD_Base::_writeByte(int value) {
     wait_us(1); // Data hold time
     
     this->_setEnable(true);        
-    this->_setData(value >> 0);   // Low nibble
+    this->_setData(value);        // Low nibble
     wait_us(1); // Data setup time        
     this->_setEnable(false);    
     wait_us(1); // Datahold time
@@ -2644,8 +2676,8 @@ TextLCD::TextLCD(PinName rs, PinName e,
     // No Hardware Enable pin       
     _e2 = NULL;                 //Construct dummy pin     
   }  
-                                                                           
-  _init();
+
+  _init(_LCD_DL_4);   // Set Datalength to 4 bit for mbed bus interfaces
 }
 
 /** Destruct a TextLCD interface for using regular mbed pins
@@ -2742,23 +2774,27 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
   
 #if (MCP23008==1)
   // MCP23008 portexpander Init
-  _write_register(IODIR,   0x00);  // All outputs
-  _write_register(IPOL,    0x00);  // No reverse polarity 
-  _write_register(GPINTEN, 0x00);  // No interrupt 
-  _write_register(DEFVAL,  0x00);  // Default value to compare against for interrupts
-  _write_register(INTCON,  0x00);  // No interrupt on changes 
-  _write_register(IOCON,   0x00);  // Interrupt polarity   
-  _write_register(GPPU,    0x00);  // No Pullup 
-  _write_register(INTF,    0x00);  //    
-  _write_register(INTCAP,  0x00);  //    
-  _write_register(GPIO,    0x00);  // Output/Input pins   
-  _write_register(OLAT,    0x00);  // Output Latch  
+  _writeRegister(IODIR,   0x00);  // All pins are outputs
+  _writeRegister(IPOL,    0x00);  // No reverse polarity on inputs
+  _writeRegister(GPINTEN, 0x00);  // No interrupt on change of input pins
+  _writeRegister(DEFVAL,  0x00);  // Default value to compare against for interrupts
+  _writeRegister(INTCON,  0x00);  // No interrupt on changes, compare against previous pin value 
+  _writeRegister(IOCON,   0x20);  // b1=0 - Interrupt polarity active low  
+                                  // b2=0 - Interrupt pin active driver output  
+                                  // b4=0 - Slew rate enable on SDA
+                                  // b5=0 - Auto-increment on registeraddress                                  
+                                  // b5=1 - No auto-increment on registeraddress => needed for performance improved I2C expander mode
+  _writeRegister(GPPU,    0x00);  // No Pullup 
+//               INTF             // Interrupt flags read (Read-Only)
+//               INTCAP           // Captured inputpins at time of interrupt (Read-Only)   
+//  _writeRegister(GPIO,    0x00);  // Output/Input pins   
+//  _writeRegister(OLAT,    0x00);  // Output Latch  
     
   // Init the portexpander bus
   _lcd_bus = D_LCD_BUS_DEF;
   
   // write the new data to the portexpander
-  _write_register(GPIO, _lcd_bus);      
+  _writeRegister(GPIO, _lcd_bus);      
 #else
   // PCF8574 of PCF8574A portexpander
 
@@ -2769,12 +2805,12 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
 #endif
 
-  _init();    
+  _init(_LCD_DL_4);   // Set Datalength to 4 bit for all serial expander interfaces
 }
 
-// Set E pin (or E2 pin)
-// Used for mbed pins, I2C bus expander or SPI shiftregister
-void TextLCD_I2C::_setEnable(bool value) {
+// Set E bit (or E2 bit) in the databus shadowvalue
+// Used for mbed I2C bus expander
+void TextLCD_I2C::_setEnableBit(bool value) {
 
   if(_ctrl_idx==_LCDCtrl_0) {
     if (value) {
@@ -2792,12 +2828,20 @@ void TextLCD_I2C::_setEnable(bool value) {
       _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
     }  
   }    
+}    
+
+// Set E pin (or E2 pin)
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_I2C::_setEnable(bool value) {
+
+  // Place the E or E2 bit data on the databus shadowvalue
+  _setEnableBit(value);
 
 #if (MCP23008==1)
   // MCP23008 portexpander
   
   // write the new data to the portexpander
-  _write_register(GPIO, _lcd_bus);      
+  _writeRegister(GPIO, _lcd_bus);      
 #else
   // PCF8574 of PCF8574A portexpander
 
@@ -2805,6 +2849,7 @@ void TextLCD_I2C::_setEnable(bool value) {
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
 #endif
 }    
+
 
 // Set RS pin
 // Used for mbed pins, I2C bus expander or SPI shiftregister
@@ -2821,7 +2866,7 @@ void TextLCD_I2C::_setRS(bool value) {
   // MCP23008 portexpander
   
   // write the new data to the portexpander
-  _write_register(GPIO, _lcd_bus);      
+  _writeRegister(GPIO, _lcd_bus);      
 #else
   // PCF8574 of PCF8574A portexpander
 
@@ -2845,7 +2890,7 @@ void TextLCD_I2C::_setBL(bool value) {
   // MCP23008 portexpander
   
   // write the new data to the portexpander
-  _write_register(GPIO, _lcd_bus);      
+  _writeRegister(GPIO, _lcd_bus);      
 #else
   // PCF8574 of PCF8574A portexpander
 
@@ -2855,64 +2900,262 @@ void TextLCD_I2C::_setBL(bool value) {
 }    
 
 
-// Place the 4bit data on the databus
-// Used for mbed pins, I2C bus expander or SPI shifregister
-void TextLCD_I2C::_setData(int value) {
-  int data;
+// Place the 4bit data in the databus shadowvalue
+// Used for mbed I2C bus expander
+void TextLCD_I2C::_setDataBits(int value) {
 
-  // Set bit by bit to support any mapping of expander portpins to LCD pins
-  
-  data = value & 0x0F;
-  if (data & 0x01){
+  // Set bit by bit to support any mapping of expander portpins to LCD pins 
+  if (value & 0x01){
     _lcd_bus |= D_LCD_D4;   // Set Databit 
   }  
   else { 
     _lcd_bus &= ~D_LCD_D4;  // Reset Databit
   }  
 
-  if (data & 0x02){
+  if (value & 0x02){
     _lcd_bus |= D_LCD_D5;   // Set Databit 
   }  
   else {
     _lcd_bus &= ~D_LCD_D5;  // Reset Databit
   }  
 
-  if (data & 0x04) {
+  if (value & 0x04) {
     _lcd_bus |= D_LCD_D6;   // Set Databit 
   }  
   else {                    
     _lcd_bus &= ~D_LCD_D6;  // Reset Databit
   }  
 
-  if (data & 0x08) {
+  if (value & 0x08) {
+    _lcd_bus |= D_LCD_D7;   // Set Databit 
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_D7;  // Reset Databit
+  }                                      
+}    
+
+// Place the 4bit data on the databus
+// Used for mbed pins, I2C bus expander or SPI shifregister
+void TextLCD_I2C::_setData(int value) {
+
+  // Place the 4bit data on the databus shadowvalue
+  _setDataBits(value); 
+  
+  // Place the 4bit data on the databus
+#if (MCP23008==1)
+  // MCP23008 portexpander
+  
+  // write the new data to the portexpander
+  _writeRegister(GPIO, _lcd_bus);      
+#else
+  // PCF8574 of PCF8574A portexpander
+
+  // write the new data to the I2C portexpander
+  _i2c->write(_slaveAddress, &_lcd_bus, 1);    
+#endif                 
+}    
+
+// Write data to MCP23008 I2C portexpander
+// Used for mbed I2C bus expander
+void TextLCD_I2C::_writeRegister (int reg, int value) {
+  char data[] = {reg, value};
+    
+  _i2c->write(_slaveAddress, data, 2); 
+}
+
+//New optimized
+//Test faster _writeByte 0.11s vs 0.27s for a 20x4 fillscreen (PCF8574)
+//Test faster _writeByte 0.14s vs 0.34s for a 20x4 fillscreen (MCP23008)
+
+// Write a byte using I2C
+void TextLCD_I2C::_writeByte(int value) {
+  char data[6];
+  
+#if (MCP23008==1)
+  // MCP23008 portexpander
+
+  data[0] = GPIO;                 // set registeraddres
+                                  // Note: auto-increment is disabled so all data will go to GPIO register
+  
+  _setEnableBit(true);            // set E 
+  _setDataBits(value >> 4);       // set data high  
+  data[1] = _lcd_bus;
+  
+  _setEnableBit(false);           // clear E   
+  data[2] = _lcd_bus;
+  
+  _setEnableBit(true);            // set E   
+  _setDataBits(value);            // set data low    
+  data[3] = _lcd_bus;
+  
+  _setEnableBit(false);           // clear E     
+  data[4] = _lcd_bus;
+  
+  // write the packed data to the I2C portexpander
+  _i2c->write(_slaveAddress, data, 5);    
+#else
+  // PCF8574 of PCF8574A portexpander
+  
+  _setEnableBit(true);            // set E 
+  _setDataBits(value >> 4);       // set data high  
+  data[0] = _lcd_bus;
+  
+  _setEnableBit(false);           // clear E   
+  data[1] = _lcd_bus;
+  
+  _setEnableBit(true);            // set E   
+  _setDataBits(value);            // set data low    
+  data[2] = _lcd_bus;
+  
+  _setEnableBit(false);           // clear E     
+  data[3] = _lcd_bus;
+  
+  // write the packed data to the I2C portexpander
+  _i2c->write(_slaveAddress, data, 4);    
+#endif
+}
+
+#endif /* I2C Expander PCF8574/MCP23008 */
+//---------- End TextLCD_I2C ------------
+
+
+//--------- Start TextLCD_SPI -----------
+#if(LCD_SPI == 1) /* SPI Expander SN74595          */
+
+ /** Create a TextLCD interface using an SPI 74595 portexpander
+   *
+   * @param spi             SPI Bus
+   * @param cs              chip select pin (active low)
+   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
+   * @param ctrl            LCD controller (default = HD44780)      
+   */
+TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
+                         TextLCD_Base(type, ctrl), 
+                         _spi(spi),        
+                         _cs(cs) {      
+        
+  // Init cs
+  _cs = 1;  
+
+  // Setup the spi for 8 bit data, low steady state clock,
+  // rising edge capture, with a 500KHz or 1MHz clock rate  
+  _spi->format(8,0);
+  _spi->frequency(500000);    
+  //_spi.frequency(1000000);    
+
+  // Init the portexpander bus
+  _lcd_bus = D_LCD_BUS_DEF;
+  
+  // write the new data to the portexpander
+  _cs = 0;  
+  _spi->write(_lcd_bus);   
+  _cs = 1;  
+
+  _init(_LCD_DL_4);   // Set Datalength to 4 bit for all serial expander interfaces
+}
+
+// Set E pin (or E2 pin)
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_SPI::_setEnable(bool value) {
+
+  if(_ctrl_idx==_LCDCtrl_0) {
+    if (value) {
+      _lcd_bus |= D_LCD_E;     // Set E bit 
+    }  
+    else {                    
+      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+    }  
+  }
+  else {
+    if (value) {
+      _lcd_bus |= D_LCD_E2;    // Set E2 bit 
+    }  
+    else {
+      _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
+    }  
+  }
+                  
+  // write the new data to the SPI portexpander
+  _cs = 0;  
+  _spi->write(_lcd_bus);   
+  _cs = 1;    
+}    
+
+// Set RS pin
+// Used for mbed pins, I2C bus expander or SPI shiftregister and SPI_N
+void TextLCD_SPI::_setRS(bool value) {
+
+  if (value) {
+    _lcd_bus |= D_LCD_RS;    // Set RS bit 
+  }  
+  else {                    
+    _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+  }
+     
+  // write the new data to the SPI portexpander
+  _cs = 0;  
+  _spi->write(_lcd_bus);   
+  _cs = 1;     
+}    
+
+// Set BL pin
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_SPI::_setBL(bool value) {
+
+  if (value) {
+    _lcd_bus |= D_LCD_BL;    // Set BL bit 
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+  }
+      
+  // write the new data to the SPI portexpander
+  _cs = 0;  
+  _spi->write(_lcd_bus);   
+  _cs = 1;      
+}    
+
+// Place the 4bit data on the databus
+// Used for mbed pins, I2C bus expander or SPI shiftregister
+void TextLCD_SPI::_setData(int value) {
+
+  // Set bit by bit to support any mapping of expander portpins to LCD pins
+  if (value & 0x01) {
+    _lcd_bus |= D_LCD_D4;   // Set Databit 
+  }  
+  else {                    
+    _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
+  }
+  
+  if (value & 0x02) {
+    _lcd_bus |= D_LCD_D5;   // Set Databit 
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+  }
+  
+  if (value & 0x04) {
+    _lcd_bus |= D_LCD_D6;   // Set Databit 
+  }  
+  else {
+    _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+  }
+  
+  if (value & 0x08) {
     _lcd_bus |= D_LCD_D7;   // Set Databit 
   }  
   else {
     _lcd_bus &= ~D_LCD_D7;  // Reset Databit
   }  
                     
-#if (MCP23008==1)
-  // MCP23008 portexpander
-  
-  // write the new data to the portexpander
-  _write_register(GPIO, _lcd_bus);      
-#else
-  // PCF8574 of PCF8574A portexpander
-
-  // write the new data to the I2C portexpander
-  _i2c->write(_slaveAddress, &_lcd_bus, 1);    
-#endif
-                 
+  // write the new data to the SPI portexpander
+  _cs = 0;  
+  _spi->write(_lcd_bus);   
+  _cs = 1;       
 }    
 
-// Write data to MCP23008 I2C portexpander
-void TextLCD_I2C::_write_register (int reg, int value) {
-  char data[] = {reg, value};
-    
-  _i2c->write(_slaveAddress, data, 2); 
-}
-#endif /* I2C Expander PCF8574/MCP23008 */
-//---------- End TextLCD_I2C ------------
+#endif /* SPI Expander SN74595          */
+//---------- End TextLCD_SPI ------------
 
 
 //--------- Start TextLCD_I2C_N ---------
@@ -3015,6 +3258,7 @@ void TextLCD_I2C_N::_writeByte(int value) {
   _i2c->write(_slaveAddress, data, 2); 
 #else  
 //Controllers that dont support ACK
+//Note: This may be issue with some mbed platforms that dont fully/correctly support I2C byte operations.
   _i2c->start(); 
   _i2c->write(_slaveAddress);   
   _i2c->write(data[0]); 
@@ -3024,159 +3268,6 @@ void TextLCD_I2C_N::_writeByte(int value) {
 }
 #endif /* Native I2C */
 //-------- End TextLCD_I2C_N ------------
-
-
-//--------- Start TextLCD_SPI -----------
-#if(LCD_SPI == 1) /* SPI Expander SN74595          */
-
- /** Create a TextLCD interface using an SPI 74595 portexpander
-   *
-   * @param spi             SPI Bus
-   * @param cs              chip select pin (active low)
-   * @param type            Sets the panel size/addressing mode (default = LCD16x2)
-   * @param ctrl            LCD controller (default = HD44780)      
-   */
-TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
-                         TextLCD_Base(type, ctrl), 
-                         _spi(spi),        
-                         _cs(cs) {      
-        
-  // Init cs
-  _setCS(true);  
-
-  // Setup the spi for 8 bit data, low steady state clock,
-  // rising edge capture, with a 500KHz or 1MHz clock rate  
-  _spi->format(8,0);
-  _spi->frequency(500000);    
-  //_spi.frequency(1000000);    
-
-  // Init the portexpander bus
-  _lcd_bus = D_LCD_BUS_DEF;
-  
-  // write the new data to the portexpander
-  _setCS(false);  
-  _spi->write(_lcd_bus);   
-  _setCS(true);  
-
-  _init();   
-}
-
-// Set E pin (or E2 pin)
-// Used for mbed pins, I2C bus expander or SPI shiftregister
-void TextLCD_SPI::_setEnable(bool value) {
-
-  if(_ctrl_idx==_LCDCtrl_0) {
-    if (value) {
-      _lcd_bus |= D_LCD_E;     // Set E bit 
-    }  
-    else {                    
-      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
-    }  
-  }
-  else {
-    if (value) {
-      _lcd_bus |= D_LCD_E2;    // Set E2 bit 
-    }  
-    else {
-      _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
-    }  
-  }
-                  
-  // write the new data to the SPI portexpander
-  _setCS(false);  
-  _spi->write(_lcd_bus);   
-  _setCS(true);    
-}    
-
-// Set RS pin
-// Used for mbed pins, I2C bus expander or SPI shiftregister and SPI_N
-void TextLCD_SPI::_setRS(bool value) {
-
-  if (value) {
-    _lcd_bus |= D_LCD_RS;    // Set RS bit 
-  }  
-  else {                    
-    _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
-  }
-     
-  // write the new data to the SPI portexpander
-  _setCS(false);  
-  _spi->write(_lcd_bus);   
-  _setCS(true);     
-}    
-
-// Set BL pin
-// Used for mbed pins, I2C bus expander or SPI shiftregister
-void TextLCD_SPI::_setBL(bool value) {
-
-  if (value) {
-    _lcd_bus |= D_LCD_BL;    // Set BL bit 
-  }  
-  else {
-    _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
-  }
-      
-  // write the new data to the SPI portexpander
-  _setCS(false);  
-  _spi->write(_lcd_bus);   
-  _setCS(true);      
-}    
-
-// Place the 4bit data on the databus
-// Used for mbed pins, I2C bus expander or SPI shiftregister
-void TextLCD_SPI::_setData(int value) {
-  int data;
-
-  // Set bit by bit to support any mapping of expander portpins to LCD pins
-    
-  data = value & 0x0F;
-  if (data & 0x01) {
-    _lcd_bus |= D_LCD_D4;   // Set Databit 
-  }  
-  else {                    
-    _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
-  }
-  
-  if (data & 0x02) {
-    _lcd_bus |= D_LCD_D5;   // Set Databit 
-  }  
-  else {
-    _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
-  }
-  
-  if (data & 0x04) {
-    _lcd_bus |= D_LCD_D6;   // Set Databit 
-  }  
-  else {
-    _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
-  }
-  
-  if (data & 0x08) {
-    _lcd_bus |= D_LCD_D7;   // Set Databit 
-  }  
-  else {
-    _lcd_bus &= ~D_LCD_D7;  // Reset Databit
-  }  
-                    
-  // write the new data to the SPI portexpander
-  _setCS(false);  
-  _spi->write(_lcd_bus);   
-  _setCS(true);          
-}    
-
-// Set CS line.
-// Only used for SPI bus
-void TextLCD_SPI::_setCS(bool value) {
-
-  if (value) {   
-    _cs  = 1;    // Set CS pin 
-  }  
-  else {
-    _cs  = 0;    // Reset CS pin 
-  }
-}
-#endif /* SPI Expander SN74595          */
-//---------- End TextLCD_SPI ------------
 
 
 //--------- Start TextLCD_SPI_N ---------
@@ -3202,12 +3293,12 @@ TextLCD_SPI_N::TextLCD_SPI_N(SPI *spi, PinName cs, PinName rs, LCDType type, Pin
   // Setup the spi for 8 bit data, high steady state clock,
   // rising edge capture, with a 500KHz or 1MHz clock rate    
 //  _spi->format(8,3);  
+//  _spi->frequency(500000); 
 //  _spi->frequency(1000000);    
   
   // Setup the spi for 8 bit data, low steady state clock,
   // rising edge capture, with a 500KHz or 1MHz clock rate  
   _spi->format(8,0);
-//  _spi->frequency(300000);    
 //  _spi->frequency(500000); 
   _spi->frequency(1000000);    
     
@@ -3292,13 +3383,12 @@ TextLCD_SPI_N_3_8::TextLCD_SPI_N_3_8(SPI *spi, PinName cs, LCDType type, PinName
   // Setup the spi for 8 bit data, high steady state clock,
   // rising edge capture, with a 500KHz or 1MHz clock rate  
 //  _spi->format(8,3);  
-//  _spi->frequency(300000);    
+//  _spi->frequency(500000);    
 //  _spi->frequency(1000000);    
 
   // Setup the spi for 8 bit data, low steady state clock,
   // rising edge capture, with a 500KHz or 1MHz clock rate  
   _spi->format(8,0);
-//  _spi->frequency(300000);    
 //  _spi->frequency(500000); 
   _spi->frequency(1000000);    
   

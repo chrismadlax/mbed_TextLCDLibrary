@@ -1,8 +1,10 @@
-/* mbed TextLCD Library, for a 4-bit LCD based on HD44780
+/* mbed TextLCD Library, for LCDs based on HD44780 controllers
  * Copyright (c) 2014, WH
  *               2014, v01: WH, Extracted from TextLCD.h as of v14
  *               2014, v02: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define
  *               2014, v03: WH, Added LCD_SPI_N_3_8 define for ST7070
+ *               2015, v04: WH, Added support for alternative fonttables (eg PCF21XX)
+ *               2015, v05: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alt fonttables (eg PCF21XX), Added ST7066_ACM for ACM1602 module, fixed contrast for ST7032 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -40,10 +42,14 @@
 #define LCD_UDC        1           /* Enable predefined UDC example*/                
 #define LCD_PRINTF     1           /* Enable Stream implementation */                
 
+//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2119C)
+#define LCD_DEFAULT_FONT 1      
+
 //Pin Defines for I2C PCF8574/PCF8574A or MCP23008 and SPI 74595 bus expander interfaces
-//LCD and serial portexpanders should be wired accordingly 
+//Different commercially available LCD portexpanders use different wiring conventions.
+//LCD and serial portexpanders should be wired according to the tables below.
 //
-//Select Hardware module (one option only)
+//Select Serial Port Expander Hardware module (one option only)
 #define DEFAULT        1
 #define ADAFRUIT       0
 #define DFROBOT        0
@@ -51,7 +57,6 @@
 #define GYLCD          0
 #define SYDZ           0
 
-//Select Hardware module (one option only)
 #if (DEFAULT==1)
 //Definitions for default (WH) mapping between serial port expander pins and LCD controller
 //This hardware supports the I2C bus expander (PCF8574/PCF8574A or MCP23008) and SPI bus expander (74595) interfaces
@@ -226,6 +231,7 @@
 #endif
 
 //Bitpattern Defines for I2C PCF8574/PCF8574A, MCP23008 and SPI 74595 Bus expanders
+//Don't change!
 //
 #define D_LCD_D4       (1<<D_LCD_PIN_D4)
 #define D_LCD_D5       (1<<D_LCD_PIN_D5)
@@ -291,6 +297,9 @@
 #define ST7036_SA2     0x7C
 #define ST7036_SA3     0x7E
 
+/* ST7066_ACM I2C slave address, Added for ACM1602 module  */
+#define ST7066_SA0     0xA0
+
 /* PCF21XX I2C slave address */
 #define PCF21XX_SA0    0x74
 #define PCF21XX_SA1    0x76
@@ -324,7 +333,7 @@
 //ST7032 EastRising ERC1602FS-4 display
 //Contrast setting 6 significant bits
 //Voltage Multiplier setting 3 significant bits
-#define LCD_ST7032_CONTRAST 0x18
+#define LCD_ST7032_CONTRAST 0x28 
 #define LCD_ST7032_RAB      0x04
 
 //ST7036 EA DOGM1603 display
