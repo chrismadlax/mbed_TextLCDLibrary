@@ -18,6 +18,7 @@
  *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
  *               2014, v16: WH, Added ST7070 and KS0073 support, added setIcon(), clrIcon() and setInvert() method for supported devices  
  *               2015, v17: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alternative fonttables (eg PCF21XX), Added ST7066_ACM controller for ACM1602 module
+ *               2015, v18: WH, Performance improvement I2C portexpander
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -1214,5 +1215,6 @@ private:
 };
 #endif /* Native SPI bus     */
 //-------- End TextLCD_SPI_N_3_24 ----------
+
 
 #endif
