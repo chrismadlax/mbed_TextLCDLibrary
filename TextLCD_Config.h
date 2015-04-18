@@ -5,6 +5,8 @@
  *               2014, v03: WH, Added LCD_SPI_N_3_8 define for ST7070
  *               2015, v04: WH, Added support for alternative fonttables (eg PCF21XX)
  *               2015, v05: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alt fonttables (eg PCF21XX), Added ST7066_ACM for ACM1602 module, fixed contrast for ST7032 
+ *               2015, v06: WH, Performance improvement I2C portexpander
+ *               2015, v07: WH, Fixed Adafruit I2C/SPI portexpander pinmappings, fixed SYDZ Backlight
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -65,16 +67,30 @@
 //Note: LCD RW pin must be connected to GND
 //      E2 is used for LCD40x4 (second controller)
 //      BL may be used to control backlight
-#define D_LCD_PIN_D4   0
-#define D_LCD_PIN_D5   1
-#define D_LCD_PIN_D6   2
-#define D_LCD_PIN_D7   3
-#define D_LCD_PIN_RS   4
-#define D_LCD_PIN_E    5
-#define D_LCD_PIN_E2   6
-#define D_LCD_PIN_BL   7
 
-#define D_LCD_PIN_RW   D_LCD_PIN_E2
+//I2C bus expander (PCF8574/PCF8574A or MCP23008) interface
+#define LCD_BUS_I2C_D4 (1 << 0)
+#define LCD_BUS_I2C_D5 (1 << 1)
+#define LCD_BUS_I2C_D6 (1 << 2)
+#define LCD_BUS_I2C_D7 (1 << 3)
+#define LCD_BUS_I2C_RS (1 << 4)
+#define LCD_BUS_I2C_E  (1 << 5)
+#define LCD_BUS_I2C_E2 (1 << 6)
+#define LCD_BUS_I2C_BL (1 << 7)
+
+#define LCD_BUS_I2C_RW (1 << 6)
+
+//SPI bus expander (74595) interface, same as I2C 
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
 
 //Select I2C Portexpander type (one option only)
 #define PCF8574        1
@@ -93,16 +109,33 @@
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on this hardware and so it does not support LCD40x4 (second controller)
 //      BL is used to control backlight
-#define D_LCD_PIN_0    0
-#define D_LCD_PIN_RS   1
-#define D_LCD_PIN_E    2
-#define D_LCD_PIN_D4   3
-#define D_LCD_PIN_D5   4
-#define D_LCD_PIN_D6   5
-#define D_LCD_PIN_D7   6
-#define D_LCD_PIN_BL   7
+//Note: The pinmappings are different for the MCP23008 and the 74595!
 
-#define D_LCD_PIN_E2   D_LCD_PIN_0
+//I2C bus expander (MCP23008) interface
+#define LCD_BUS_I2C_0  (1 << 0)
+#define LCD_BUS_I2C_RS (1 << 1)
+#define LCD_BUS_I2C_E  (1 << 2)
+#define LCD_BUS_I2C_D4 (1 << 3)
+#define LCD_BUS_I2C_D5 (1 << 4)
+#define LCD_BUS_I2C_D6 (1 << 5)
+#define LCD_BUS_I2C_D7 (1 << 6)
+#define LCD_BUS_I2C_BL (1 << 7)
+
+#define LCD_BUS_I2C_E2 (1 << 0)
+#define LCD_BUS_I2C_RW (1 << 0)
+
+//SPI bus expander (74595) interface
+#define LCD_BUS_SPI_0  (1 << 0)
+#define LCD_BUS_SPI_RS (1 << 1)
+#define LCD_BUS_SPI_E  (1 << 2)
+#define LCD_BUS_SPI_D7 (1 << 3)
+#define LCD_BUS_SPI_D6 (1 << 4)
+#define LCD_BUS_SPI_D5 (1 << 5)
+#define LCD_BUS_SPI_D4 (1 << 6)
+#define LCD_BUS_SPI_BL (1 << 7)
+
+#define LCD_BUS_SPI_E2 (1 << 0)
+#define LCD_BUS_SPI_RW (1 << 0)
 
 //Force I2C portexpander type
 #define PCF8574        0
@@ -127,16 +160,31 @@
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default Arduino hardware and so it does not support LCD40x4 (second controller)
 //      BL is used to control backlight
-#define D_LCD_PIN_RS   0
-#define D_LCD_PIN_RW   1
-#define D_LCD_PIN_E    2
-#define D_LCD_PIN_BL   3
-#define D_LCD_PIN_D4   4
-#define D_LCD_PIN_D5   5
-#define D_LCD_PIN_D6   6
-#define D_LCD_PIN_D7   7
 
-#define D_LCD_PIN_E2   D_LCD_PIN_RW
+//I2C bus expander PCF8574 interface
+#define LCD_BUS_I2C_RS (1 << 0)
+#define LCD_BUS_I2C_RW (1 << 1)
+#define LCD_BUS_I2C_E  (1 << 2)
+#define LCD_BUS_I2C_BL (1 << 3)
+#define LCD_BUS_I2C_D4 (1 << 4)
+#define LCD_BUS_I2C_D5 (1 << 5)
+#define LCD_BUS_I2C_D6 (1 << 6)
+#define LCD_BUS_I2C_D7 (1 << 7)
+
+#define LCD_BUS_I2C_E2 (1 << 1)
+
+//SPI bus expander (74595) interface, same as I2C
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
+
 
 //Force I2C portexpander type
 #define PCF8574        1
@@ -155,16 +203,30 @@
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
 //      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
-#define D_LCD_PIN_RS   0
-#define D_LCD_PIN_RW   1
-#define D_LCD_PIN_E    2
-#define D_LCD_PIN_BL   3
-#define D_LCD_PIN_D4   4
-#define D_LCD_PIN_D5   5
-#define D_LCD_PIN_D6   6
-#define D_LCD_PIN_D7   7
 
-#define D_LCD_PIN_E2   D_LCD_PIN_RW
+//I2C bus expander PCF8574 interface
+#define LCD_BUS_I2C_RS (1 << 0)
+#define LCD_BUS_I2C_RW (1 << 1)
+#define LCD_BUS_I2C_E  (1 << 2)
+#define LCD_BUS_I2C_BL (1 << 3)
+#define LCD_BUS_I2C_D4 (1 << 4)
+#define LCD_BUS_I2C_D5 (1 << 5)
+#define LCD_BUS_I2C_D6 (1 << 6)
+#define LCD_BUS_I2C_D7 (1 << 7)
+
+#define LCD_BUS_I2C_E2 (1 << 1)
+
+//SPI bus expander (74595) interface, same as I2C
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
 
 //Force I2C portexpander type
 #define PCF8574        1
@@ -183,16 +245,30 @@
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
 //      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
-#define D_LCD_PIN_D4   0
-#define D_LCD_PIN_D5   1
-#define D_LCD_PIN_D6   2
-#define D_LCD_PIN_D7   3
-#define D_LCD_PIN_EN   4
-#define D_LCD_PIN_RW   5
-#define D_LCD_PIN_RS   6
-#define D_LCD_PIN_BL   7
 
-#define D_LCD_PIN_E2   D_LCD_PIN_RW
+//I2C bus expander PCF8574 interface
+#define LCD_BUS_I2C_D4 (1 << 0)
+#define LCD_BUS_I2C_D5 (1 << 1)
+#define LCD_BUS_I2C_D6 (1 << 2)
+#define LCD_BUS_I2C_D7 (1 << 3)
+#define LCD_BUS_I2C_E  (1 << 4)
+#define LCD_BUS_I2C_RW (1 << 5)
+#define LCD_BUS_I2C_RS (1 << 6)
+#define LCD_BUS_I2C_BL (1 << 7)
+
+#define LCD_BUS_I2C_E2 (1 << 5)
+
+//SPI bus expander (74595) interface
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
 
 //Force I2C portexpander type
 #define PCF8574        1
@@ -204,47 +280,62 @@
 
 #if (SYDZ==1)
 //Definitions for SYDZ Module mapping between serial port expander pins and LCD controller. 
-//Very similar to DFROBOT. This hardware uses PCF8574A and uses inverted Backlight control
-//Slaveaddress may be set by switches (default 0x40). SDA/SCL has pullup Resistors onboard.
+//Very similar to DFROBOT. This hardware uses PCF8574A.
+//Slaveaddress may be set by switches (default 0x70). SDA/SCL has pullup Resistors onboard.
 //See ebay
 //
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
-//      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
-#define D_LCD_PIN_RS   0
-#define D_LCD_PIN_RW   1
-#define D_LCD_PIN_E    2
-#define D_LCD_PIN_BL   3
-#define D_LCD_PIN_D4   4
-#define D_LCD_PIN_D5   5
-#define D_LCD_PIN_D6   6
-#define D_LCD_PIN_D7   7
+//      BL is used to control backlight
 
-#define D_LCD_PIN_E2   D_LCD_PIN_RW
+//I2C bus expander PCF8574A interface
+#define LCD_BUS_I2C_RS (1 << 0)
+#define LCD_BUS_I2C_RW (1 << 1)
+#define LCD_BUS_I2C_E  (1 << 2)
+#define LCD_BUS_I2C_BL (1 << 3)
+#define LCD_BUS_I2C_D4 (1 << 4)
+#define LCD_BUS_I2C_D5 (1 << 5)
+#define LCD_BUS_I2C_D6 (1 << 6)
+#define LCD_BUS_I2C_D7 (1 << 7)
+
+#define LCD_BUS_I2C_E2 (1 << 1)
+
+//SPI bus expander (74595) interface, same as I2C
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
 
 //Force I2C portexpander type
 #define PCF8574        1
 #define MCP23008       0
 
 //Force Inverted Backlight control
-#define BACKLIGHT_INV  1
+#define BACKLIGHT_INV  0
 #endif
 
 //Bitpattern Defines for I2C PCF8574/PCF8574A, MCP23008 and SPI 74595 Bus expanders
 //Don't change!
-//
-#define D_LCD_D4       (1<<D_LCD_PIN_D4)
-#define D_LCD_D5       (1<<D_LCD_PIN_D5)
-#define D_LCD_D6       (1<<D_LCD_PIN_D6)
-#define D_LCD_D7       (1<<D_LCD_PIN_D7)
-#define D_LCD_RS       (1<<D_LCD_PIN_RS)
-#define D_LCD_E        (1<<D_LCD_PIN_E)
-#define D_LCD_E2       (1<<D_LCD_PIN_E2)
-#define D_LCD_BL       (1<<D_LCD_PIN_BL)
-//#define D_LCD_RW       (1<<D_LCD_PIN_RW)
+#define LCD_BUS_I2C_MSK (LCD_BUS_I2C_D4 | LCD_BUS_I2C_D5 | LCD_BUS_I2C_D6 | LCD_BUS_I2C_D7)
+#if (BACKLIGHT_INV == 1)
+#define LCD_BUS_I2C_DEF (0x00 | LCD_BUS_I2C_BL)
+#else
+#define LCD_BUS_I2C_DEF  0x00
+#endif
 
-#define D_LCD_BUS_MSK  (D_LCD_D4 | D_LCD_D5 | D_LCD_D6 | D_LCD_D7)
-#define D_LCD_BUS_DEF  0x00
+#define LCD_BUS_SPI_MSK (LCD_BUS_SPI_D4 | LCD_BUS_SPI_D5 | LCD_BUS_SPI_D6 | LCD_BUS_SPI_D7)
+#if (BACKLIGHT_INV == 1)
+#define LCD_BUS_SPI_DEF (0x00 | LCD_BUS_SPI_BL)
+#else
+#define LCD_BUS_SPI_DEF  0x00
+#endif
+
 
 /* PCF8574/PCF8574A I2C portexpander slave address */
 #define PCF8574_SA0    0x40

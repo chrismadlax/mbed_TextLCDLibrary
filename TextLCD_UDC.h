@@ -1,6 +1,7 @@
 /* mbed TextLCD Library, for LCDs based on HD44780 controllers
  * Copyright (c) 2014, WH
  *               2014, v01: WH, Extracted from TextLCD.h as of v14
+ *               2015, v02: WH, Added some UDC definitions and commented out several UDCs
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -51,10 +52,10 @@ extern const char udc_5[];       // =
 extern const char udc_6[];       // checkerboard
 extern const char udc_7[];       // \
 
-extern const char udc_degr[];    // Degree symbol
+//extern const char udc_degr[];    // Degree symbol
 
-extern const char udc_TM_T[];    // Trademark T
-extern const char udc_TM_M[];    // Trademark M
+//extern const char udc_TM_T[];    // Trademark T
+//extern const char udc_TM_M[];    // Trademark M
 
 //extern const char udc_Bat_Hi[];  // Battery Full
 //extern const char udc_Bat_Ha[];  // Battery Half
@@ -82,8 +83,20 @@ extern const char udc_smiley[];  // Smiley
 //extern const char udc_ch_mo[];   // Month  (kana)
 //extern const char udc_ch_dy[];   // Day    (kana)
 //extern const char udc_ch_mi[];   // minute (kana)
-extern const char udc_None[]; 
-extern const char udc_All[];
+
+//extern const char udc_bell[];
+//extern const char udc_note[];
+//extern const char udc_clock[];
+//extern const char udc_heart[];
+//extern const char udc_duck[];
+//extern const char udc_check[];
+//extern const char udc_cross[];
+//extern const char udc_retarrow[];
+//extern const char udc_OK[];
+//extern const char udc_1_2[];
+
+//extern const char udc_None[]; 
+//extern const char udc_All[];
 #endif /* LCD_UDC Examples */
 
 #endif // MBED_TEXTLCDUDC_H

@@ -18,6 +18,8 @@
  *               2014, v15: WH, Added AC780 support, added I2C expander modules, fixed setBacklight() for inverted logic modules. Fixed bug in LCD_SPI_N define 
  *               2014, v16: WH, Added ST7070 and KS0073 support, added setIcon(), clrIcon() and setInvert() method for supported devices 
  *               2015, v17: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alternative fonttables (eg PCF21XX), Added ST7066_ACM controller for ACM1602 module 
+ *               2015, v18: WH, Performance improvement I2C portexpander
+ *               2015, v19: WH, Fixed Adafruit I2C/SPI portexpander pinmappings, fixed SYDZ Backlight 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -69,6 +71,8 @@ TextLCD_Base::TextLCD_Base(LCDType type, LCDCtrl ctrl) : _type(type), _ctrl(ctrl
   *  @return none 
   */
 void TextLCD_Base::_init(_LCDDatalength dl) {
+
+  wait_ms(100);                  // Wait 100ms to ensure powered up
   
   // Select and configure second LCD controller when needed
   if(_type==LCD40x4) {
@@ -101,8 +105,6 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
   int _lines=0;      // Set lines (Ext Instr Set), temporary variable.
 
     this->_setRS(false); // command mode
-    
-    wait_ms(20);         // Wait 20ms to ensure powered up
 
     if (dl == _LCD_DL_4) {
       // The Controller could be in 8 bit mode (power-on reset) or in 4 bit mode (warm reboot) at this point.
@@ -110,18 +112,18 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
       // between the uP and the LCD can only write the 4 most significant bits (Most Significant Nibble, MSN).
       // In 4 bit mode the LCD expects the MSN first, followed by the LSN.
       //
-      //    Current state:               8 bit mode                |  4 bit mode, MSN is next      | 4 bit mode, LSN is next          
+      //    Current state:               8 bit mode                |      4 bit mode, MSN is next        | 4 bit mode, LSN is next          
                            //-------------------------------------------------------------------------------------------------                          
-      _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, |   set 8 bit mode (MSN),       |    set dummy LSN, 
-                           //  remains in 8 bit mode               |    change to 8 bit mode       |  remains in 4 bit mode
+      _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, |   set 8 bit mode (MSN),             |    set dummy LSN, 
+                           //  remains in 8 bit mode               |    remains in 4 bit mode            |  remains in 4 bit mode
       wait_ms(15);         //                           
      
-      _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set 8bit mode (MSN), 
-                           //  remains in 8 bit mode               |   remains in 8 bit mode       |  remains in 4 bit mode
+      _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, |      set dummy LSN,                 |    set 8bit mode (MSN), 
+                           //  remains in 8 bit mode               |   change to 8 bit mode              |  remains in 4 bit mode
       wait_ms(15);         // 
     
-      _writeNibble(0x3);   //  set 8 bit mode and dummy LSN,       | set 8 bit mode and dummy LSN, |    set dummy LSN, 
-                           //  remains in 8 bit mode               |   remains in 8 bit mode       |  change to 8 bit mode
+      _writeNibble(0x3);   //  set 8 bit mode (MSN) and dummy LSN, | set 8 bit mode (MSN) and dummy LSN, |    set dummy LSN, 
+                           //  remains in 8 bit mode               |   remains in 8 bit mode             |  change to 8 bit mode
       wait_ms(15);         // 
 
       // Controller is now in 8 bit mode
@@ -132,6 +134,10 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
       // Controller is now in 4-bit mode
       // Note: 4/8 bit mode is ignored for most native SPI and I2C devices. They dont use the parallel bus.
       //       However, _writeNibble() method is void anyway for native SPI and I2C devices.
+    }
+    else {
+      // Reset in 8 bit mode, final Function set will follow 
+      _writeCommand(0x30); // Function set 0 0 1 DL=1 N F x x       
     }      
    
     // Device specific initialisations: DC/DC converter to generate VLCD or VLED, number of lines etc
@@ -1422,7 +1428,7 @@ void TextLCD_Base::_writeNibble(int value) {
 
 // Enable is Low
     this->_setEnable(true);        
-    this->_setData(value);        // Low nibble
+    this->_setData(value);        // Low nibble of value on D4..D7
     wait_us(1); // Data setup time        
     this->_setEnable(false);    
     wait_us(1); // Datahold time
@@ -2676,8 +2682,8 @@ TextLCD::TextLCD(PinName rs, PinName e,
     // No Hardware Enable pin       
     _e2 = NULL;                 //Construct dummy pin     
   }  
-
-  _init(_LCD_DL_4);   // Set Datalength to 4 bit for mbed bus interfaces
+  
+   _init(_LCD_DL_4);   // Set Datalength to 4 bit for mbed bus interfaces
 }
 
 /** Destruct a TextLCD interface for using regular mbed pins
@@ -2791,7 +2797,7 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
 //  _writeRegister(OLAT,    0x00);  // Output Latch  
     
   // Init the portexpander bus
-  _lcd_bus = D_LCD_BUS_DEF;
+  _lcd_bus = LCD_BUS_I2C_DEF;
   
   // write the new data to the portexpander
   _writeRegister(GPIO, _lcd_bus);      
@@ -2799,7 +2805,7 @@ TextLCD_I2C::TextLCD_I2C(I2C *i2c, char deviceAddress, LCDType type, LCDCtrl ctr
   // PCF8574 of PCF8574A portexpander
 
   // Init the portexpander bus
-  _lcd_bus = D_LCD_BUS_DEF;
+  _lcd_bus = LCD_BUS_I2C_DEF;
 
   // write the new data to the portexpander
   _i2c->write(_slaveAddress, &_lcd_bus, 1);    
@@ -2814,18 +2820,18 @@ void TextLCD_I2C::_setEnableBit(bool value) {
 
   if(_ctrl_idx==_LCDCtrl_0) {
     if (value) {
-      _lcd_bus |= D_LCD_E;     // Set E bit 
+      _lcd_bus |= LCD_BUS_I2C_E;     // Set E bit 
     }  
     else {                    
-      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+      _lcd_bus &= ~LCD_BUS_I2C_E;    // Reset E bit                     
     }  
   }
   else {
     if (value) {
-      _lcd_bus |= D_LCD_E2;    // Set E2 bit 
+      _lcd_bus |= LCD_BUS_I2C_E2;    // Set E2 bit 
     }  
     else {
-      _lcd_bus &= ~D_LCD_E2;   // Reset E2bit                     
+      _lcd_bus &= ~LCD_BUS_I2C_E2;   // Reset E2bit                     
     }  
   }    
 }    
@@ -2856,10 +2862,10 @@ void TextLCD_I2C::_setEnable(bool value) {
 void TextLCD_I2C::_setRS(bool value) {
 
   if (value) {
-    _lcd_bus |= D_LCD_RS;    // Set RS bit 
+    _lcd_bus |= LCD_BUS_I2C_RS;    // Set RS bit 
   }  
   else {                    
-    _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+    _lcd_bus &= ~LCD_BUS_I2C_RS;   // Reset RS bit                     
   }
 
 #if (MCP23008==1)
@@ -2880,10 +2886,10 @@ void TextLCD_I2C::_setRS(bool value) {
 void TextLCD_I2C::_setBL(bool value) {
 
   if (value) {
-    _lcd_bus |= D_LCD_BL;    // Set BL bit 
+    _lcd_bus |= LCD_BUS_I2C_BL;    // Set BL bit 
   }  
   else {                    
-    _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+    _lcd_bus &= ~LCD_BUS_I2C_BL;   // Reset BL bit                     
   }
   
 #if (MCP23008==1)
@@ -2899,40 +2905,76 @@ void TextLCD_I2C::_setBL(bool value) {
 #endif                 
 }    
 
+#if(0)
+// New optimized v018
+// Test faster _writeByte 0.11s vs 0.27s for a 20x4 fillscreen (PCF8574), same as v018
+// Place the 4bit data in the databus shadowvalue
+// Used for mbed I2C bus expander
+const char _LCD_DATA_BITS[16] = {
+      0x00,
+      (                                                   LCD_BUS_I2C_D4),
+      (                                  LCD_BUS_I2C_D5                 ),
+      (                                  LCD_BUS_I2C_D5 | LCD_BUS_I2C_D4),
+      (                 LCD_BUS_I2C_D6                                  ),                  
+      (                 LCD_BUS_I2C_D6                  | LCD_BUS_I2C_D4),
+      (                 LCD_BUS_I2C_D6 | LCD_BUS_I2C_D5                 ),
+      (                 LCD_BUS_I2C_D6 | LCD_BUS_I2C_D5 | LCD_BUS_I2C_D4),
+      (LCD_BUS_I2C_D7                                                   ),
+      (LCD_BUS_I2C_D7                                   | LCD_BUS_I2C_D4),
+      (LCD_BUS_I2C_D7                  | LCD_BUS_I2C_D5                 ),
+      (LCD_BUS_I2C_D7                  | LCD_BUS_I2C_D5 | LCD_BUS_I2C_D4),                  
+      (LCD_BUS_I2C_D7 | LCD_BUS_I2C_D6                                  ),
+      (LCD_BUS_I2C_D7 | LCD_BUS_I2C_D6                  | LCD_BUS_I2C_D4),
+      (LCD_BUS_I2C_D7 | LCD_BUS_I2C_D6 | LCD_BUS_I2C_D5                 ),
+      (LCD_BUS_I2C_D7 | LCD_BUS_I2C_D6 | LCD_BUS_I2C_D5 | LCD_BUS_I2C_D4)
+    };
+void TextLCD_I2C::_setDataBits(int value) {
 
+  //Clear all databits
+  _lcd_bus &= ~LCD_BUS_I2C_MSK;
+
+  // Set bit by bit to support any mapping of expander portpins to LCD pins 
+  _lcd_bus |= _LCD_DATA_BITS[value & 0x0F];
+}    
+
+#else
+//orig v017
+// Test faster _writeByte 0.11s vs 0.27s for a 20x4 fillscreen (PCF8574)
 // Place the 4bit data in the databus shadowvalue
 // Used for mbed I2C bus expander
 void TextLCD_I2C::_setDataBits(int value) {
 
   // Set bit by bit to support any mapping of expander portpins to LCD pins 
   if (value & 0x01){
-    _lcd_bus |= D_LCD_D4;   // Set Databit 
+    _lcd_bus |= LCD_BUS_I2C_D4;   // Set Databit 
   }  
   else { 
-    _lcd_bus &= ~D_LCD_D4;  // Reset Databit
+    _lcd_bus &= ~LCD_BUS_I2C_D4;  // Reset Databit
   }  
 
   if (value & 0x02){
-    _lcd_bus |= D_LCD_D5;   // Set Databit 
+    _lcd_bus |= LCD_BUS_I2C_D5;   // Set Databit 
   }  
   else {
-    _lcd_bus &= ~D_LCD_D5;  // Reset Databit
+    _lcd_bus &= ~LCD_BUS_I2C_D5;  // Reset Databit
   }  
 
   if (value & 0x04) {
-    _lcd_bus |= D_LCD_D6;   // Set Databit 
+    _lcd_bus |= LCD_BUS_I2C_D6;   // Set Databit 
   }  
   else {                    
-    _lcd_bus &= ~D_LCD_D6;  // Reset Databit
+    _lcd_bus &= ~LCD_BUS_I2C_D6;  // Reset Databit
   }  
 
   if (value & 0x08) {
-    _lcd_bus |= D_LCD_D7;   // Set Databit 
+    _lcd_bus |= LCD_BUS_I2C_D7;   // Set Databit 
   }  
   else {
-    _lcd_bus &= ~D_LCD_D7;  // Reset Databit
+    _lcd_bus &= ~LCD_BUS_I2C_D7;  // Reset Databit
   }                                      
 }    
+#endif
+
 
 // Place the 4bit data on the databus
 // Used for mbed pins, I2C bus expander or SPI shifregister
@@ -3032,8 +3074,7 @@ void TextLCD_I2C::_writeByte(int value) {
 TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
                          TextLCD_Base(type, ctrl), 
                          _spi(spi),        
-                         _cs(cs) {      
-        
+                         _cs(cs) {              
   // Init cs
   _cs = 1;  
 
@@ -3043,8 +3084,10 @@ TextLCD_SPI::TextLCD_SPI(SPI *spi, PinName cs, LCDType type, LCDCtrl ctrl) :
   _spi->frequency(500000);    
   //_spi.frequency(1000000);    
 
+  wait_ms(100);                   // Wait 100ms to ensure LCD powered up
+  
   // Init the portexpander bus
-  _lcd_bus = D_LCD_BUS_DEF;
+  _lcd_bus = LCD_BUS_SPI_DEF;
   
   // write the new data to the portexpander
   _cs = 0;  
@@ -3060,18 +3103,18 @@ void TextLCD_SPI::_setEnable(bool value) {
 
   if(_ctrl_idx==_LCDCtrl_0) {
     if (value) {
-      _lcd_bus |= D_LCD_E;     // Set E bit 
+      _lcd_bus |= LCD_BUS_SPI_E;     // Set E bit 
     }  
     else {                    
-      _lcd_bus &= ~D_LCD_E;    // Reset E bit                     
+      _lcd_bus &= ~LCD_BUS_SPI_E;    // Reset E bit                     
     }  
   }
   else {
     if (value) {
-      _lcd_bus |= D_LCD_E2;    // Set E2 bit 
+      _lcd_bus |= LCD_BUS_SPI_E2;    // Set E2 bit 
     }  
     else {
-      _lcd_bus &= ~D_LCD_E2;   // Reset E2 bit                     
+      _lcd_bus &= ~LCD_BUS_SPI_E2;   // Reset E2 bit                     
     }  
   }
                   
@@ -3086,10 +3129,10 @@ void TextLCD_SPI::_setEnable(bool value) {
 void TextLCD_SPI::_setRS(bool value) {
 
   if (value) {
-    _lcd_bus |= D_LCD_RS;    // Set RS bit 
+    _lcd_bus |= LCD_BUS_SPI_RS;    // Set RS bit 
   }  
   else {                    
-    _lcd_bus &= ~D_LCD_RS;   // Reset RS bit                     
+    _lcd_bus &= ~LCD_BUS_SPI_RS;   // Reset RS bit                     
   }
      
   // write the new data to the SPI portexpander
@@ -3103,10 +3146,10 @@ void TextLCD_SPI::_setRS(bool value) {
 void TextLCD_SPI::_setBL(bool value) {
 
   if (value) {
-    _lcd_bus |= D_LCD_BL;    // Set BL bit 
+    _lcd_bus |= LCD_BUS_SPI_BL;    // Set BL bit 
   }  
   else {
-    _lcd_bus &= ~D_LCD_BL;   // Reset BL bit                     
+    _lcd_bus &= ~LCD_BUS_SPI_BL;   // Reset BL bit                     
   }
       
   // write the new data to the SPI portexpander
@@ -3121,31 +3164,31 @@ void TextLCD_SPI::_setData(int value) {
 
   // Set bit by bit to support any mapping of expander portpins to LCD pins
   if (value & 0x01) {
-    _lcd_bus |= D_LCD_D4;   // Set Databit 
+    _lcd_bus |= LCD_BUS_SPI_D4;   // Set Databit 
   }  
   else {                    
-    _lcd_bus &= ~D_LCD_D4;  // Reset Databit                     
+    _lcd_bus &= ~LCD_BUS_SPI_D4;  // Reset Databit                     
   }
   
   if (value & 0x02) {
-    _lcd_bus |= D_LCD_D5;   // Set Databit 
+    _lcd_bus |= LCD_BUS_SPI_D5;   // Set Databit 
   }  
   else {
-    _lcd_bus &= ~D_LCD_D5;  // Reset Databit                     
+    _lcd_bus &= ~LCD_BUS_SPI_D5;  // Reset Databit                     
   }
   
   if (value & 0x04) {
-    _lcd_bus |= D_LCD_D6;   // Set Databit 
+    _lcd_bus |= LCD_BUS_SPI_D6;   // Set Databit 
   }  
   else {
-    _lcd_bus &= ~D_LCD_D6;  // Reset Databit                     
+    _lcd_bus &= ~LCD_BUS_SPI_D6;  // Reset Databit                     
   }
   
   if (value & 0x08) {
-    _lcd_bus |= D_LCD_D7;   // Set Databit 
+    _lcd_bus |= LCD_BUS_SPI_D7;   // Set Databit 
   }  
   else {
-    _lcd_bus &= ~D_LCD_D7;  // Reset Databit
+    _lcd_bus &= ~LCD_BUS_SPI_D7;  // Reset Databit
   }  
                     
   // write the new data to the SPI portexpander
