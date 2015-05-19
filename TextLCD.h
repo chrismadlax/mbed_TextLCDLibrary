@@ -19,6 +19,9 @@
  *               2014, v16: WH, Added ST7070 and KS0073 support, added setIcon(), clrIcon() and setInvert() method for supported devices  
  *               2015, v17: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alternative fonttables (eg PCF21XX), Added ST7066_ACM controller for ACM1602 module
  *               2015, v18: WH, Performance improvement I2C portexpander
+ *               2015, v19: WH, Added 10x2D and 10x4D type for SSD1803 
+ *               2015, v20: WH, Fixed occasional Init fail caused by insufficient wait time after ReturnHome command (0x02), Added defines to reduce memory footprint (eg LCD_ICON),
+ *                              Fixed and Added more fonttable support for PCF2119K, Added HD66712 controller.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -102,6 +105,7 @@
 #define LCD_T_R2       0x00000200
 #define LCD_T_R3       0x00000300
 #define LCD_T_R4       0x00000400
+#define LCD_T_R6       0x00000600
   
 // Addressing mode encoded in b19..b16
 #define LCD_T_ADR_MSK  0x000F0000
@@ -135,8 +139,8 @@
 // Fonttable encoded in b15..b12
 #define LCD_C_FNT_MSK  0x0000F000 
 #define LCD_C_FT0      0x00000000  /*Default             */
-#define LCD_C_FT1      0x00001000  /*Font1               */
-#define LCD_C_FT2      0x00002000  /*Font2               */
+#define LCD_C_FT1      0x00001000  /*Font1, C            */
+#define LCD_C_FT2      0x00002000  /*Font2, R            */
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
@@ -160,48 +164,51 @@ public:
     /** LCD panel format */
     // The commented out types exist but have not yet been tested with the library
     enum LCDType {
-//        LCD6x1     = (LCD_T_A | LCD_T_C6 | LCD_T_R1),     /**<  6x1 LCD panel */          
-//        LCD6x2     = (LCD_T_A | LCD_T_C6 | LCD_T_R2),     /**<  6x2 LCD panel */          
-        LCD8x1     = (LCD_T_A | LCD_T_C8 | LCD_T_R1),     /**<  8x1 LCD panel */    
-        LCD8x2     = (LCD_T_A | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel */          
-        LCD8x2B    = (LCD_T_D | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel (actually 16x1) */                  
-        LCD12x1    = (LCD_T_A | LCD_T_C12 | LCD_T_R1),    /**< 12x1 LCD panel */                          
-        LCD12x2    = (LCD_T_A | LCD_T_C12 | LCD_T_R2),    /**< 12x2 LCD panel */                          
-        LCD12x3D   = (LCD_T_D | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */                                  
-        LCD12x3D1  = (LCD_T_D1 | LCD_T_C12 | LCD_T_R3),   /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */                                          
-//        LCD12x3G   = (LCD_T_G | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode ST7036 */                                      
-        LCD12x4    = (LCD_T_A | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel */                  
-        LCD12x4D   = (LCD_T_B | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel, special mode PCF21XX, KS0073 */                                          
-        LCD16x1    = (LCD_T_A | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel */                  
-        LCD16x1C   = (LCD_T_C | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel (actually 8x2) */          
+//        LCD6x1     = (LCD_T_A | LCD_T_C6 | LCD_T_R1),     /**<  6x1 LCD panel */
+//        LCD6x2     = (LCD_T_A | LCD_T_C6 | LCD_T_R2),     /**<  6x2 LCD panel */
+        LCD8x1     = (LCD_T_A | LCD_T_C8 | LCD_T_R1),     /**<  8x1 LCD panel */
+        LCD8x2     = (LCD_T_A | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel */
+        LCD8x2B    = (LCD_T_D | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel (actually 16x1) */
+//        LCD10x2D   = (LCD_T_D | LCD_T_C10 | LCD_T_R2),    /**< 10x2 LCD panel, special mode SSD1803, 4-line but double height */        
+        LCD10x4D   = (LCD_T_D | LCD_T_C10 | LCD_T_R4),    /**< 10x4 LCD panel, special mode SSD1803 */
+        LCD12x1    = (LCD_T_A | LCD_T_C12 | LCD_T_R1),    /**< 12x1 LCD panel */
+        LCD12x2    = (LCD_T_A | LCD_T_C12 | LCD_T_R2),    /**< 12x2 LCD panel */
+        LCD12x3D   = (LCD_T_D | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */
+        LCD12x3D1  = (LCD_T_D1 | LCD_T_C12 | LCD_T_R3),   /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */
+//        LCD12x3G   = (LCD_T_G | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode ST7036 */
+        LCD12x4    = (LCD_T_A | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel */
+        LCD12x4D   = (LCD_T_B | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel, special mode PCF21XX, KS0073 */
+        LCD16x1    = (LCD_T_A | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel */
+        LCD16x1C   = (LCD_T_C | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel (actually 8x2) */
         LCD16x2    = (LCD_T_A | LCD_T_C16 | LCD_T_R2),    /**< 16x2 LCD panel (default) */
 //        LCD16x2B   = (LCD_T_B | LCD_T_C16 | LCD_T_R2),    /**< 16x2 LCD panel, alternate addressing, wrong.. */
-        LCD16x3D   = (LCD_T_D | LCD_T_C16 | LCD_T_R3),    /**< 16x3 LCD panel, special mode SSD1803 */                      
-//        LCD16x3D1  = (LCD_T_D1 | LCD_T_C16 | LCD_T_R3),   /**< 16x3 LCD panel, special mode SSD1803 */                
-        LCD16x3F   = (LCD_T_F | LCD_T_C16 | LCD_T_R3),    /**< 16x3 LCD panel (actually 24x2) */                
-        LCD16x3G   = (LCD_T_G | LCD_T_C16 | LCD_T_R3),    /**< 16x3 LCD panel, special mode ST7036 */                              
-        LCD16x4    = (LCD_T_A | LCD_T_C16 | LCD_T_R4),    /**< 16x4 LCD panel */        
-//        LCD16x4D   = (LCD_T_D | LCD_T_C16 | LCD_T_R4),    /**< 16x4 LCD panel, special mode SSD1803 */                
+        LCD16x3D   = (LCD_T_D | LCD_T_C16 | LCD_T_R3),    /**< 16x3 LCD panel, special mode SSD1803 */           
+//        LCD16x3D1  = (LCD_T_D1 | LCD_T_C16 | LCD_T_R3),   /**< 16x3 LCD panel, special mode SSD1803 */
+        LCD16x3F   = (LCD_T_F | LCD_T_C16 | LCD_T_R3),    /**< 16x3 LCD panel (actually 24x2) */
+        LCD16x3G   = (LCD_T_G | LCD_T_C16 | LCD_T_R3),    /**< 16x3 LCD panel, special mode ST7036 */
+        LCD16x4    = (LCD_T_A | LCD_T_C16 | LCD_T_R4),    /**< 16x4 LCD panel */
+//        LCD16x4D   = (LCD_T_D | LCD_T_C16 | LCD_T_R4),    /**< 16x4 LCD panel, special mode SSD1803 */
         LCD20x1    = (LCD_T_A | LCD_T_C20 | LCD_T_R1),    /**< 20x1 LCD panel */
         LCD20x2    = (LCD_T_A | LCD_T_C20 | LCD_T_R2),    /**< 20x2 LCD panel */
-//        LCD20x3    = (LCD_T_A | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel */                        
-//        LCD20x3D   = (LCD_T_D | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel, special mode SSD1803 */                        
-//        LCD20x3D1  = (LCD_T_D1 | LCD_T_C20 | LCD_T_R3),   /**< 20x3 LCD panel, special mode SSD1803 */                        
+//        LCD20x3    = (LCD_T_A | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel */
+//        LCD20x3D   = (LCD_T_D | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel, special mode SSD1803 */
+//        LCD20x3D1  = (LCD_T_D1 | LCD_T_C20 | LCD_T_R3),   /**< 20x3 LCD panel, special mode SSD1803 */
         LCD20x4    = (LCD_T_A | LCD_T_C20 | LCD_T_R4),    /**< 20x4 LCD panel */
-        LCD20x4D   = (LCD_T_D | LCD_T_C20 | LCD_T_R4),    /**< 20x4 LCD panel, special mode SSD1803 */                        
-        LCD24x1    = (LCD_T_A | LCD_T_C24 | LCD_T_R1),    /**< 24x1 LCD panel */        
-        LCD24x2    = (LCD_T_A | LCD_T_C24 | LCD_T_R2),    /**< 24x2 LCD panel */        
-//        LCD24x3D   = (LCD_T_D | LCD_T_C24 | LCD_T_R3),    /**< 24x3 LCD panel */                
-//        LCD24x3D1  = (LCD_T_D | LCD_T_C24 | LCD_T_R3),    /**< 24x3 LCD panel */                        
-        LCD24x4D   = (LCD_T_D | LCD_T_C24 | LCD_T_R4),    /**< 24x4 LCD panel, special mode KS0078 */                                                          
+        LCD20x4D   = (LCD_T_D | LCD_T_C20 | LCD_T_R4),    /**< 20x4 LCD panel, special mode SSD1803 */
+//        LCD20x6    = (LCD_T_E | LCD_T_C20 | LCD_T_R6),    /**< 20x6 LCD panel, Two controller version */        
+        LCD24x1    = (LCD_T_A | LCD_T_C24 | LCD_T_R1),    /**< 24x1 LCD panel */
+        LCD24x2    = (LCD_T_A | LCD_T_C24 | LCD_T_R2),    /**< 24x2 LCD panel */
+//        LCD24x3D   = (LCD_T_D | LCD_T_C24 | LCD_T_R3),    /**< 24x3 LCD panel */
+//        LCD24x3D1  = (LCD_T_D | LCD_T_C24 | LCD_T_R3),    /**< 24x3 LCD panel */
+        LCD24x4D   = (LCD_T_D | LCD_T_C24 | LCD_T_R4),    /**< 24x4 LCD panel, special mode KS0078 */
 //        LCD32x1    = (LCD_T_A | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel */
-//        LCD32x1C   = (LCD_T_C | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel (actually 16x2) */                                        
-//        LCD32x2    = (LCD_T_A | LCD_T_C32 | LCD_T_R2),    /**< 32x2 LCD panel */                        
-//        LCD32x4    = (LCD_T_A | LCD_T_C32 | LCD_T_R4),    /**< 32x4 LCD panel */                        
-//        LCD40x1    = (LCD_T_A | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel */                        
-//        LCD40x1C   = (LCD_T_C | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel (actually 20x2) */                        
-        LCD40x2    = (LCD_T_A | LCD_T_C40 | LCD_T_R2),    /**< 40x2 LCD panel */                
-        LCD40x4    = (LCD_T_E | LCD_T_C40 | LCD_T_R4)     /**< 40x4 LCD panel, Two controller version */                        
+//        LCD32x1C   = (LCD_T_C | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel (actually 16x2) */
+//        LCD32x2    = (LCD_T_A | LCD_T_C32 | LCD_T_R2),    /**< 32x2 LCD panel */
+//        LCD32x4    = (LCD_T_A | LCD_T_C32 | LCD_T_R4),    /**< 32x4 LCD panel */
+//        LCD40x1    = (LCD_T_A | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel */
+//        LCD40x1C   = (LCD_T_C | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel (actually 20x2) */
+        LCD40x2    = (LCD_T_A | LCD_T_C40 | LCD_T_R2),    /**< 40x2 LCD panel */
+        LCD40x4    = (LCD_T_E | LCD_T_C40 | LCD_T_R4)     /**< 40x4 LCD panel, Two controller version */
     };
 
 
@@ -215,11 +222,14 @@ public:
         PCF2103_3V3     =  5 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2103 3V3 no Booster, 4/8 bit, I2C         */                                   
         PCF2113_3V3     =  6 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                           /**<  PCF2113 3V3 with Booster, 4/8 bit, I2C       */                           
         PCF2116_3V3     =  7 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST),                                       /**<  PCF2116 3V3 with Booster, 4/8 bit, I2C       */                           
-        PCF2116_5V      =  8 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2116 5V no Booster, 4/8 bit, I2C          */        
-        PCF2116C_5V     =  9 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST) | LCD_C_FT1,                           /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */                           
-        PCF2119_3V3     = 10 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                           /**<  PCF2119 3V3 with Booster, 4/8 bit, I2C       */                           
-//        PCF2119C_3V3    = 11 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR), LCD_C_FT1,                /**<  PCF2119K 3V3 with Booster, 4/8 bit, I2C       */                           
-//        PCF2119_5V      = 12 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2119 5V no Booster, 4/8 bit, I2C          */
+//        PCF2116C_3V3    =    | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FT1),                           /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */
+//        PCF2116K_3V3    =    | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FT2),                           /**<  PCF2116K 3V3 with Booster, 4/8 bit, I2C       */
+        PCF2116_5V      =  8 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2116 5V no Booster, 4/8 bit, I2C          */
+        PCF2116C_5V     =  9 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FT1),                           /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */
+        PCF2119_3V3     = 10 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                           /**<  PCF2119 3V3 with Booster, 4/8 bit, I2C       */
+//        PCF2119C_3V3    = 11 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR | LCD_C_FT1),                /**<  PCF2119K 3V3 with Booster, 4/8 bit, I2C       */
+        PCF2119R_3V3    = 12 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR | LCD_C_FT2),                /**<  PCF2119R 3V3 with Booster, 4/8 bit, I2C       */
+//        PCF2119_5V      =    | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2119 5V no Booster, 4/8 bit, I2C          */
         PT6314          = 13 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR),                                       /**<  PT6314  VFD, 4/8 bit, SPI3                   */
         SSD1803_3V3     = 14 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
 //        SSD1803_5V      = 15 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
@@ -230,9 +240,9 @@ public:
         ST7066_ACM      = 20 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  ST7066 4/8 bit, I2C on ACM1602 using a PIC   */        
         ST7070          = 21 | (LCD_C_PAR | LCD_C_SPI3_8 | LCD_C_SPI4),                                       /**<  ST7070 4/8 bit, SPI3                         */
         US2066_3V3      = 22 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_CTR | LCD_C_PDN),               /**<  US2066/SSD1311 3V3, 4/8 bit, I2C, SPI3 */
-        WS0010          = 23 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_PDN)                                        /**<  WS0010/RS0010 OLED Controller, 4/8 bit, SPI3 */    
+        WS0010          = 23 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_PDN),                                       /**<  WS0010/RS0010 OLED Controller, 4/8 bit, SPI3 */    
 //        WS0012          = 24 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_I2C | LCD_C_PDN),                           /**<  WS0012 4/8 bit, SPI, I2C                     */
-
+        HD66712         = 25 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_BST | LCD_C_PDN)                            /**<  HD66712 Controller, 4/8 bit, SPI3 */    
     };
 
 
@@ -330,7 +340,7 @@ public:
      * @param row     The vertical position from the top, indexed from 0
      * @return        The memoryaddress of screen column and row location
      */
-    int  getAddress(int column, int row);     
+    int getAddress(int column, int row);     
     
     /** Set the memoryaddress of screen column and row location
      *
@@ -380,12 +390,14 @@ public:
      */
     void setUDC(unsigned char c, char *udc_data);
 
+#if(LCD_BLINK == 1)
     /** Set UDC Blink and Icon blink
      * setUDCBlink method is supported by some compatible devices (eg SSD1803) 
      *
      * @param blinkMode The Blink mode (BlinkOff, BlinkOn)
      */
     void setUDCBlink(LCDBlink blinkMode);
+#endif
 
     /** Set Contrast
      * setContrast method is supported by some compatible devices (eg ST7032i) that have onboard LCD voltage generation
@@ -396,6 +408,7 @@ public:
      */
     void setContrast(unsigned char c = LCD_DEF_CONTRAST);
 
+#if(LCD_POWER == 1)
     /** Set Power
      * setPower method is supported by some compatible devices (eg SSD1803) that have power down modes
      *
@@ -403,7 +416,9 @@ public:
      * @return none
      */
     void setPower(bool powerOn = true);
+#endif
 
+#if(LCD_ORIENT == 1)
     /** Set Orient
      * setOrient method is supported by some compatible devices (eg SSD1803, US2066) that have top/bottom view modes
      *
@@ -411,7 +426,9 @@ public:
      * @return none
      */
     void setOrient(LCDOrient orient = Top);
+#endif
 
+#if(LCD_BIGFONT == 1)
     /** Set Big Font
      * setBigFont method is supported by some compatible devices (eg SSD1803, US2066) 
      *
@@ -420,7 +437,9 @@ public:
      *                                            Valid double height lines depend on the LCDs number of rows.
      */
     void setBigFont(LCDBigFont lines);
+#endif
 
+#if(LCD_ICON==1)
     /** Set Icons
     *
     * @param unsigned char idx   The Index of the icon pattern (0..15) for KS0073 and similar controllers
@@ -437,7 +456,9 @@ public:
      */
     //@TODO Add support for 40x4 dual controller       
     void clrIcon();
+#endif
 
+#if(LCD_INVERT == 1)
    /** Set Invert
      * setInvert method is supported by some compatible devices (eg KS0073) to swap between black and white 
      *
@@ -446,6 +467,7 @@ public:
      */
    //@TODO Add support for 40x4 dual controller  
    void setInvert(bool invertOn);
+#endif
 
 protected:
 

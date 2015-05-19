@@ -92,8 +92,9 @@ extern const char udc_smiley[];  // Smiley
 //extern const char udc_check[];
 //extern const char udc_cross[];
 //extern const char udc_retarrow[];
-//extern const char udc_OK[];
-//extern const char udc_1_2[];
+//extern const char udc_OK[];       // Ok
+//extern const char udc_1_2[];      // 1/2
+//extern const char udc_Euro[];     // Euro symbol
 
 //extern const char udc_None[]; 
 //extern const char udc_All[];

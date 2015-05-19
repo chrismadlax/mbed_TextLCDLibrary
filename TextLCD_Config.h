@@ -7,6 +7,7 @@
  *               2015, v05: WH, Clean up low-level _writeCommand() and _writeData(), Added support for alt fonttables (eg PCF21XX), Added ST7066_ACM for ACM1602 module, fixed contrast for ST7032 
  *               2015, v06: WH, Performance improvement I2C portexpander
  *               2015, v07: WH, Fixed Adafruit I2C/SPI portexpander pinmappings, fixed SYDZ Backlight
+ *               2015, v08: WH, Added defines to reduce memory footprint (eg LCD_ICON), added some I2C portexpander defines 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,23 +42,33 @@
 #define LCD_SPI_N_3_24 1           /* Native SPI bus     */
 
 //Select options to reduce memory footprint (multiple options allowed)
-#define LCD_UDC        1           /* Enable predefined UDC example*/                
-#define LCD_PRINTF     1           /* Enable Stream implementation */                
+#define LCD_UDC        1           /* Enable predefined UDC example*/
+#define LCD_PRINTF     1           /* Enable Stream implementation */
+#define LCD_ICON       1           /* Enable Icon implementation -2.0K codesize*/
+#define LCD_ORIENT     1           /* Enable Orientation switch implementation -0.9K codesize*/
+#define LCD_BIGFONT    0           /* Enable Big Font implementation -0.6K codesize */
+#define LCD_INVERT     0           /* Enable display Invert implementation -0.5K codesize*/
+#define LCD_POWER      0           /* Enable Power control implementation -0.1K codesize*/
+#define LCD_BLINK      1           /* Enable UDC and Icon Blink control implementation -0.8K codesize*/
 
-//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2119C)
-#define LCD_DEFAULT_FONT 1      
+//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2119C, PCF2119R)
+#define LCD_DEFAULT_FONT 0
 
 //Pin Defines for I2C PCF8574/PCF8574A or MCP23008 and SPI 74595 bus expander interfaces
 //Different commercially available LCD portexpanders use different wiring conventions.
 //LCD and serial portexpanders should be wired according to the tables below.
 //
 //Select Serial Port Expander Hardware module (one option only)
-#define DEFAULT        1
+#define DEFAULT        0
 #define ADAFRUIT       0
 #define DFROBOT        0
+#define LCM1602        0
 #define YWROBOT        0
 #define GYLCD          0
-#define SYDZ           0
+#define MJKDZ          0
+#define SYDZ           1
+#define WIDEHK         0
+#define LCDPLUG        0
 
 #if (DEFAULT==1)
 //Definitions for default (WH) mapping between serial port expander pins and LCD controller
@@ -194,15 +205,15 @@
 #define BACKLIGHT_INV  0
 #endif
 
-#if (YWROBOT==1)
+#if ((YWROBOT==1) || (LCM1602==1))
 //Definitions for YWROBOT LCM1602 V1 Module mapping between serial port expander pins and LCD controller. 
-//Very similar to DFROBOT. This hardware uses PCF8574.
+//Very similar to DFROBOT. Also marked as 'Funduino'. This hardware uses PCF8574.
 //Slaveaddress may be set by solderbridges (default 0x4E). SDA/SCL has no pullup Resistors onboard.
 //See http://arduino-info.wikispaces.com/LCD-Blue-I2C
 //
 //Note: LCD RW pin must be kept LOW
 //      E2 is not available on default hardware and so it does not support LCD40x4 (second controller)
-//      BL is used to control backlight, reverse logic: Low turns on Backlight. This is handled in setBacklight()
+//      BL is used to control backlight.
 
 //I2C bus expander PCF8574 interface
 #define LCD_BUS_I2C_RS (1 << 0)
@@ -236,8 +247,8 @@
 #define BACKLIGHT_INV  0
 #endif
 
-#if (GYLCD==1)
-//Definitions for Arduino-IIC-LCD GY-LCD-V1 Module mapping between serial port expander pins and LCD controller. 
+#if ((GYLCD==1) || (MJKDZ==1))
+//Definitions for Arduino-IIC-LCD GY-LCD-V1, for GY-IICLCD and for MJKDZ Module mapping between serial port expander pins and LCD controller. 
 //Very similar to DFROBOT. This hardware uses PCF8574.
 //Slaveaddress may be set by solderbridges (default 0x4E). SDA/SCL has pullup Resistors onboard.
 //See http://arduino-info.wikispaces.com/LCD-Blue-I2C
@@ -319,6 +330,93 @@
 //Force Inverted Backlight control
 #define BACKLIGHT_INV  0
 #endif
+
+#if (WIDEHK==1)
+//Definitions for WIDE.HK I2C backpack mapping between serial port expander pins and LCD controller
+//This hardware uses an MCP23008 I2C expander.
+//Slaveaddress is hardcoded at 0x4E. SDA/SCL has pullup Resistors onboard (3k3).
+//See http://www.wide.hk
+//
+//Note: LCD RW pin must be kept LOW
+//      E2 is not available on this hardware and so it does not support LCD40x4 (second controller)
+//      BL is used to control backlight
+//
+
+//I2C bus expander (MCP23008) interface
+#define LCD_BUS_I2C_D4 (1 << 0)
+#define LCD_BUS_I2C_D5 (1 << 1)
+#define LCD_BUS_I2C_D6 (1 << 2)
+#define LCD_BUS_I2C_D7 (1 << 3)
+#define LCD_BUS_I2C_RS (1 << 4)
+#define LCD_BUS_I2C_RW (1 << 5)
+#define LCD_BUS_I2C_BL (1 << 6)
+#define LCD_BUS_I2C_E  (1 << 7)
+
+#define LCD_BUS_I2C_E2 (1 << 5)
+
+//SPI bus expander (74595) interface, same as I2C
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
+
+//Force I2C portexpander type
+#define PCF8574        0
+#define MCP23008       1
+
+//Inverted Backlight control
+#define BACKLIGHT_INV  0
+#endif
+
+#if (LCDPLUG==1)
+//Definitions for Jeelabs LCD_Plug I2C backpack mapping between serial port expander pins and LCD controller
+//This hardware uses an MCP23008 I2C expander.
+//Slaveaddress is hardcoded at 0x48. SDA/SCL has no pullup Resistors onboard.
+//See http://jeelabs.net/projects/hardware/wiki/lcd_plug
+//
+//Note: LCD RW pin must be kept LOW
+//      E2 is available on a plug and so it does support LCD40x4 (second controller)
+//      BL is used to control backlight
+//
+
+//I2C bus expander (MCP23008) interface
+#define LCD_BUS_I2C_D4 (1 << 0)
+#define LCD_BUS_I2C_D5 (1 << 1)
+#define LCD_BUS_I2C_D6 (1 << 2)
+#define LCD_BUS_I2C_D7 (1 << 3)
+#define LCD_BUS_I2C_RS (1 << 4)
+#define LCD_BUS_I2C_E2 (1 << 5)
+#define LCD_BUS_I2C_E  (1 << 6)
+#define LCD_BUS_I2C_BL (1 << 7)
+
+#define LCD_BUS_I2C_RW (1 << 5)
+
+//SPI bus expander (74595) interface, same as I2C
+#define LCD_BUS_SPI_D4 LCD_BUS_I2C_D4
+#define LCD_BUS_SPI_D5 LCD_BUS_I2C_D5
+#define LCD_BUS_SPI_D6 LCD_BUS_I2C_D6
+#define LCD_BUS_SPI_D7 LCD_BUS_I2C_D7
+#define LCD_BUS_SPI_RS LCD_BUS_I2C_RS
+#define LCD_BUS_SPI_E2 LCD_BUS_I2C_E2
+#define LCD_BUS_SPI_E  LCD_BUS_I2C_E
+#define LCD_BUS_SPI_BL LCD_BUS_I2C_BL
+
+#define LCD_BUS_SPI_RW LCD_BUS_I2C_RW
+
+//Force I2C portexpander type
+#define PCF8574        0
+#define MCP23008       1
+
+//Inverted Backlight control
+#define BACKLIGHT_INV  0
+#endif
+
 
 //Bitpattern Defines for I2C PCF8574/PCF8574A, MCP23008 and SPI 74595 Bus expanders
 //Don't change!
