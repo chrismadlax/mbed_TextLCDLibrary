@@ -21,7 +21,7 @@
  *               2015, v18: WH, Performance improvement I2C portexpander
  *               2015, v19: WH, Added 10x2D and 10x4D type for SSD1803 
  *               2015, v20: WH, Fixed occasional Init fail caused by insufficient wait time after ReturnHome command (0x02), Added defines to reduce memory footprint (eg LCD_ICON),
- *                              Fixed and Added more fonttable support for PCF2119K, Added HD66712 controller.
+ *                              Fixed and Added more fonttable support for PCF2119R_3V3, Added HD66712 controller.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
