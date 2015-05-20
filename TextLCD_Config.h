@@ -46,27 +46,27 @@
 #define LCD_PRINTF     1           /* Enable Stream implementation */
 #define LCD_ICON       1           /* Enable Icon implementation -2.0K codesize*/
 #define LCD_ORIENT     1           /* Enable Orientation switch implementation -0.9K codesize*/
-#define LCD_BIGFONT    0           /* Enable Big Font implementation -0.6K codesize */
-#define LCD_INVERT     0           /* Enable display Invert implementation -0.5K codesize*/
-#define LCD_POWER      0           /* Enable Power control implementation -0.1K codesize*/
+#define LCD_BIGFONT    1           /* Enable Big Font implementation -0.6K codesize */
+#define LCD_INVERT     1           /* Enable display Invert implementation -0.5K codesize*/
+#define LCD_POWER      1           /* Enable Power control implementation -0.1K codesize*/
 #define LCD_BLINK      1           /* Enable UDC and Icon Blink control implementation -0.8K codesize*/
 
-//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2119C, PCF2119R)
-#define LCD_DEFAULT_FONT 0
+//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2116C, PCF2119R)
+#define LCD_DEF_FONT   1
 
 //Pin Defines for I2C PCF8574/PCF8574A or MCP23008 and SPI 74595 bus expander interfaces
 //Different commercially available LCD portexpanders use different wiring conventions.
 //LCD and serial portexpanders should be wired according to the tables below.
 //
 //Select Serial Port Expander Hardware module (one option only)
-#define DEFAULT        0
+#define DEFAULT        1
 #define ADAFRUIT       0
 #define DFROBOT        0
 #define LCM1602        0
 #define YWROBOT        0
 #define GYLCD          0
 #define MJKDZ          0
-#define SYDZ           1
+#define SYDZ           0
 #define WIDEHK         0
 #define LCDPLUG        0
 

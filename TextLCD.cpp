@@ -21,7 +21,7 @@
  *               2015, v18: WH, Performance improvement I2C portexpander
  *               2015, v19: WH, Fixed Adafruit I2C/SPI portexpander pinmappings, fixed SYDZ Backlight 
  *               2015, v20: WH, Fixed occasional Init fail caused by insufficient wait time after ReturnHome command (0x02), Added defines to reduce memory footprint (eg LCD_ICON),
- *                              Fixed and Added more fonttable support for PCF2119K, Added HD66712 controller.
+ *                              Fixed and Added more fonttable support for PCF2119R_3V3, Added HD66712 controller.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -1225,48 +1225,45 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
             case LCD20x1:
             case LCD24x1:
 //            case LCD32x1:        // EXT pin is High, extension driver needed
-              _function  = 0x02;    // Function set 001 DL N RE(0) DH REV (Std Regs)
+              _function  = 0x02;    // Function set 001 DL N RE(0) - - (Std Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=0  (1-line mode, N=1 2-line mode)
-                                    //   RE=0  (Dis. Extended Regs, special mode for KS0073)
-                                    //   DH=1  (Disp shift enable, special mode for KS0073)                                
-                                    //   REV=0 (Reverse normal, special mode for KS0073)
+                                    //   RE=0  (Dis. Extended Regs, special mode for HD66712)
+                                    //   
                                     
               _function_1 = 0x04;   // Function set 001 DL N RE(1) BE LP (Ext Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=0  (1-line mode, N=1 2-line mode)
-                                    //   RE=1  (Ena Extended Regs, special mode for KS0073)
-                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for KS0073)                                
-                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)
+                                    //   RE=1  (Ena Extended Regs; special mode for HD66712)
+                                    //   BE=0  (Blink Enable, CG/SEG RAM; special mode for HD66712)                                
+                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal; special mode for HD66712)
 
               _function_x = 0x00;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
-                                    //    NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0073)                                
+                                    //    NW=0  (1,2 line), NW=1 (4 Line, special mode for HD66712)                                
               break;                                
 
-//            case LCD12x3D:         // Special mode for KS0073, KS0078 and PCF21XX            
-//            case LCD12x3D1:        // Special mode for KS0073, KS0078 and PCF21XX            
+//            case LCD12x3D:         // Special mode for KS0073, KS0078, PCF21XX and HD66712
+//            case LCD12x3D1:        // Special mode for KS0073, KS0078, PCF21XX and HD66712
             case LCD12x4D:         // Special mode for KS0073, KS0078, PCF21XX and HD66712
-//            case LCD16x3D:         // Special mode for KS0073, KS0078             
-//            case LCD16x4D:         // Special mode for KS0073, KS0078            
+//            case LCD16x3D:         // Special mode for KS0073, KS0078 and HD66712
+//            case LCD16x4D:         // Special mode for KS0073, KS0078 and HD66712            
             case LCD20x4D:         // Special mode for KS0073, KS0078 and HD66712            
-              _function  = 0x02;    // Function set 001 DL N RE(0) DH REV (Std Regs)
+              _function  = 0x02;    // Function set 001 DL N RE(0) - - (Std Regs)
                                     //   DL=0  (4 bits bus)             
-                                    //    N=0  (dont care for 4 line mode)              
-                                    //   RE=0  (Dis. Extended Regs, special mode for KS0073)
-                                    //   DH=1  (Disp shift enable, special mode for KS0073)                                
-                                    //   REV=0 (Reverse normal, special mode for KS0073)
+                                    //    N=0  (1-line mode, N=1 2-line mode)
+                                    //   RE=0  (Dis. Extended Regs, special mode for HD66712)
+                                    //   
                                     
               _function_1 = 0x04;   // Function set 001 DL N RE(1) BE LP (Ext Regs)
                                     //   DL=0  (4 bits bus)             
-                                    //    N=0  (1-line mode), N=1 (2-line mode)
-                                    //   RE=1  (Ena Extended Regs, special mode for KS0073)
-                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for KS0073)                                
-                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)                                    
+                                    //    N=0  (1-line mode, N=1 2-line mode)
+                                    //   RE=1  (Ena Extended Regs; special mode for HD66712)
+                                    //   BE=0  (Blink Enable, CG/SEG RAM; special mode for HD66712)                                
+                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal; special mode for HD66712)
 
               _function_x = 0x01;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
-                                    //    NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0073)                                
+                                    //    NW=0  (1,2 line), NW=1 (4 Line, special mode for HD66712)                                
               break;                                
-
 
             case LCD16x3G:            // Special mode for ST7036                        
 //            case LCD24x3D:         // Special mode for KS0078
@@ -1277,22 +1274,20 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
 
             default:
               // All other LCD types are initialised as 2 Line displays (including LCD16x1C and LCD40x4)            
-              _function  = 0x0A;    // Function set 001 DL N RE(0) DH REV (Std Regs)
+              _function  = 0x0A;    // Function set 001 DL N RE(0) - - (Std Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=1  (2-line mode), N=0 (1-line mode)
-                                    //   RE=0  (Dis. Extended Regs, special mode for KS0073)
-                                    //   DH=1  (Disp shift enable, special mode for KS0073)                                
-                                    //   REV=0 (Reverse normal, special mode for KS0073)
+                                    //   RE=0  (Dis. Extended Regs, special mode for HD66712)
                                     
               _function_1 = 0x0C;   // Function set 001 DL N RE(1) BE LP (Ext Regs)
                                     //   DL=0  (4 bits bus)             
                                     //    N=1  (2 line mode), N=0 (1-line mode)
-                                    //   RE=1  (Ena Extended Regs, special mode for KS0073)
-                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for KS0073)                   
-                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)                                                                                     
+                                    //   RE=1  (Ena Extended Regs, special mode for HD66712)
+                                    //   BE=0  (Blink Enable, CG/SEG RAM, special mode for HD66712)
+                                    //   LP=0  (LP=1 Low power mode, LP=0 Normal)
 
               _function_x = 0x00;   // Ext Function set 0000 1 FW BW NW (Ext Regs)
-                                    //   NW=0  (1,2 line), NW=1 (4 Line, special mode for KS0073)                                
+                                    //   NW=0  (1,2 line), NW=1 (4 Line, special mode for HD66712)
               break;
           } // switch type
 
@@ -1300,27 +1295,27 @@ void TextLCD_Base::_initCtrl(_LCDDatalength dl) {
           _writeCommand(0x20 | _function_1);// Function set 001 DL N RE(1) BE LP (Ext Regs)
                                            //   DL=0 (4 bits bus), DL=1 (8 bits mode)            
                                            //    N=0 (1 line mode), N=1 (2 line mode)
-                                           //   RE=1 (Ena Extended Regs, special mode for KS0073)
-                                           //   BE=0 (Blink Enable/Disable, CG/SEG RAM, special mode for KS0073)                                
+                                           //   RE=1 (Ena Extended Regs, special mode for HD66712)
+                                           //   BE=0 (Blink Enable/Disable, CG/SEG RAM, special mode for HD66712)                                
                                            //   LP=0  (LP=1 Low power mode, LP=0 Normal)                                                                                                                                
 
           _writeCommand(0x08 | _function_x); // Ext Function set 0000 1 FW BW NW (Ext Regs)
-                                           //   FW=0  (5-dot font, special mode for KS0073)
-                                           //   BW=0  (Cur BW invert disable, special mode for KS0073)
-                                           //   NW=0  (1,2 Line), NW=1 (4 line, special mode for KS0073)                                
+                                           //   FW=0  (5-dot font, special mode for HD66712)
+                                           //   BW=0  (Cur BW invert disable, special mode for HD66712)
+                                           //   NW=0  (1,2 Line), NW=1 (4 line, special mode for HD66712)                                
 
-          _writeCommand(0x10);             // Scroll/Shift set 0001 DS/HS4 DS/HS3 DS/HS2 DS/HS1 (Ext Regs)
-                                           //   Dotscroll/Display shift enable (Special mode for KS0073)
+          _writeCommand(0x10);             // Scroll/Shift set 0001 HS4 HS3 HS2 HS1 (Ext Regs)
+                                           //   Dotscroll/Display shift enable (Special mode for HD66712)
 
-          _writeCommand(0x80);             // Scroll Quantity set 1 0 SQ5 SQ4 SQ3 SQ2 SQ1 SQ0 (Ext Regs)
-                                           //   Scroll quantity (Special mode for KS0073)
+          _writeCommand(0x80);             // Scroll Quantity set 1 0 HDS5 HDS4 HDS3 HDS2 HDS1 HDS0 (Ext Regs)
+                                           //   Scroll quantity (Special mode for HD66712)
 
           _writeCommand(0x20 | _function); // Function set 001 DL N RE(0) DH REV (Std Regs)
                                            //   DL=0  (4 bits bus), DL=1 (8 bits mode)             
                                            //    N=0  (1 line mode), N=1 (2 line mode)
-                                           //   RE=0  (Dis. Extended Regs, special mode for KS0073)
-                                           //   DH=1  (Disp shift enable/disable, special mode for KS0073)                                
-                                           //   REV=0 (Reverse/Normal, special mode for KS0073)
+                                           //   RE=0  (Dis. Extended Regs, special mode for HD66712)
+                                           //   DH=1  (Disp shift enable/disable, special mode for HD66712)
+                                           //   REV=0 (Reverse/Normal, special mode for HD66712)
           break; // case HD66712 Controller
 
            
@@ -1466,7 +1461,7 @@ int TextLCD_Base::_putc(int value) {
     }
     else {
       //Character to write
-#if (LCD_DEFAULT_FONT == 1)      
+#if (LCD_DEF_FONT == 1)      
       _writeData(value);
 #else
       _writeData(ASCII_2_LCD(value));
@@ -1978,7 +1973,8 @@ void TextLCD_Base::_setUDC(unsigned char c, char *udc_data) {
     case PCF2113_3V3 : // Some UDCs may be used for Icons                      
     case PCF2116_3V3 :          
     case PCF2116_5V  :              
-    case PCF2119_3V3 : // Some UDCs may be used for Icons             
+    case PCF2119_3V3 : // Some UDCs may be used for Icons
+    case PCF2119R_3V3: // Some UDCs may be used for Icons                 
       c = c & 0x0F; // mask down to valid range
       break;
 
@@ -2036,13 +2032,14 @@ void TextLCD_Base::setUDCBlink(LCDBlink blinkMode){
     case BlinkOn: 
       // Controllers that support UDC/Icon Blink  
       switch (_ctrl) {
-        case KS0073 :            
-        case KS0078 :            
+        case KS0073 :
+        case KS0078 :
+        case HD66712 :                    
           _function_1 |= 0x02; // Enable UDC/Icon Blink        
           _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0/LP (Ext Regs)
 
           _writeCommand(0x20 | _function);          // Function set 0 0 1 DL N RE(0) DH REV (Std Regs)
-          break; // case KS0073, KS0078 Controller
+          break; // case KS0073, KS0078, HD66712 Controller
     
         case US2066_3V3 :  
         case SSD1803_3V3 :  
@@ -2075,13 +2072,14 @@ void TextLCD_Base::setUDCBlink(LCDBlink blinkMode){
     case BlinkOff:
       // Controllers that support UDC Blink  
       switch (_ctrl) {
-        case KS0073 :            
-        case KS0078 :            
+        case KS0073 :
+        case KS0078 :
+        case HD66712:
           _function_1 &= ~0x02; // Disable UDC/Icon Blink        
           _writeCommand(0x20 | _function_1);        // Function set 0 0 1 DL N RE(1) BE 0/LP (Ext Regs)
 
           _writeCommand(0x20 | _function);          // Function set 0 0 1 DL N RE(0) DH REV (Std Regs)
-          break; // case KS0073, KS0078 Controller
+          break; // case KS0073, KS0078, HD66712 Controller
     
         case US2066_3V3 :  
         case SSD1803_3V3 :  
