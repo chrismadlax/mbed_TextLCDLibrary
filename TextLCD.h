@@ -22,6 +22,8 @@
  *               2015, v19: WH, Added 10x2D and 10x4D type for SSD1803 
  *               2015, v20: WH, Fixed occasional Init fail caused by insufficient wait time after ReturnHome command (0x02), Added defines to reduce memory footprint (eg LCD_ICON),
  *                              Fixed and Added more fonttable support for PCF2119R_3V3, Added HD66712 controller.
+ *               2015, v21: WH, Added LCD32x2 defines and code, Fixed LCD12x4D enum, Added font enums, Added SPLC792A controller,
+ *                              Added UTF8_2_LCD decode for Cyrilic font (By Andriy Ribalko). Added setFont()
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -87,41 +89,51 @@
 
 /* LCD Type information on Rows, Columns and Variant. This information is encoded in
  * an int and used for the LCDType enumerators in order to simplify code maintenance */
-// Columns encoded in b7..b0
-#define LCD_T_COL_MSK  0x000000FF
-#define LCD_T_C6       0x00000006
-#define LCD_T_C8       0x00000008
-#define LCD_T_C10      0x0000000A
-#define LCD_T_C12      0x0000000C
-#define LCD_T_C16      0x00000010
-#define LCD_T_C20      0x00000014
-#define LCD_T_C24      0x00000018
-#define LCD_T_C32      0x00000020
-#define LCD_T_C40      0x00000028
 
-// Rows encoded in b15..b8  
-#define LCD_T_ROW_MSK  0x0000FF00
-#define LCD_T_R1       0x00000100
-#define LCD_T_R2       0x00000200
-#define LCD_T_R3       0x00000300
-#define LCD_T_R4       0x00000400
-#define LCD_T_R6       0x00000600
+// Type ID encoded in b7..b0
+#define LCD_T_ID_MSK   0x000000FF
+#define LCD_T_ID_SHFT           0
+
+// Columns encoded in b15..b8
+#define LCD_T_COL_MSK  0x0000FF00
+#define LCD_T_COL_SHFT          8
+#define LCD_T_C6       0x00000600
+#define LCD_T_C8       0x00000800
+#define LCD_T_C10      0x00000A00
+#define LCD_T_C12      0x00000C00
+#define LCD_T_C16      0x00001000
+#define LCD_T_C20      0x00001400
+#define LCD_T_C24      0x00001800
+#define LCD_T_C32      0x00002000
+#define LCD_T_C40      0x00002800
+//#define LCD_T_C52      0x00003400
+
+// Rows encoded in b23..b16  
+#define LCD_T_ROW_MSK  0x00FF0000
+#define LCD_T_ROW_SHFT         16
+#define LCD_T_R1       0x00010000
+#define LCD_T_R2       0x00020000
+#define LCD_T_R3       0x00030000
+#define LCD_T_R4       0x00040000
+#define LCD_T_R6       0x00060000
   
-// Addressing mode encoded in b19..b16
-#define LCD_T_ADR_MSK  0x000F0000
+// Addressing mode encoded in b27..b24
+#define LCD_T_ADR_MSK  0x0F000000
+#define LCD_T_ADR_SHFT         24
 #define LCD_T_A        0x00000000  /*Mode A   Default 1, 2 or 4 line display                       */
-#define LCD_T_B        0x00010000  /*Mode B,  Alternate 8x2 (actually 16x1 display)                */
-#define LCD_T_C        0x00020000  /*Mode C,  Alternate 16x1 (actually 8x2 display)                */
-#define LCD_T_D        0x00030000  /*Mode D,  Alternate 3 or 4 line display (12x4, 20x4, 24x4)     */
-#define LCD_T_D1       0x00040000  /*Mode D1, Alternate 3 out of 4 line display (12x3, 20x3, 24x3) */
-#define LCD_T_E        0x00050000  /*Mode E,  40x4 display (actually two 40x2)                     */
-#define LCD_T_F        0x00060000  /*Mode F,  16x3 display (actually 24x2)                         */
-#define LCD_T_G        0x00070000  /*Mode G,  16x3 display                                         */
+#define LCD_T_B        0x01000000  /*Mode B,  Alternate 8x2 (actually 16x1 display)                */
+#define LCD_T_C        0x02000000  /*Mode C,  Alternate 16x1 (actually 8x2 display)                */
+#define LCD_T_D        0x03000000  /*Mode D,  Alternate 3 or 4 line display (12x4, 20x4, 24x4)     */
+#define LCD_T_D1       0x04000000  /*Mode D1, Alternate 3 out of 4 line display (12x3, 20x3, 24x3) */
+#define LCD_T_E        0x05000000  /*Mode E,  40x4 display (actually two 40x2)                     */
+#define LCD_T_F        0x06000000  /*Mode F,  16x3 display (actually 24x2)                         */
+#define LCD_T_G        0x07000000  /*Mode G,  16x3 display                                         */
 
 /* LCD Ctrl information on interface support and features. This information is encoded in
  * an int and used for the LCDCtrl enumerators in order to simplify code maintenance */
 // Interface encoded in b31..b24
 #define LCD_C_BUS_MSK  0xFF000000
+#define LCD_C_BUS_SHFT         24
 #define LCD_C_PAR      0x01000000  /*Parallel 4 or 8 bit data, E pin, RS pin, RW=GND            */
 #define LCD_C_SPI3_8   0x02000000  /*SPI 3 line (MOSI, SCL, CS pins),  8 bits (Count Command initiates Data transfer) */
 #define LCD_C_SPI3_9   0x04000000  /*SPI 3 line (MOSI, SCL, CS pins),  9 bits (RS + 8 Data)     */
@@ -132,15 +144,27 @@
 #define LCD_C_I2C      0x80000000  /*I2C (SDA, SCL pin), 8 control bits (Co, RS, RW) + 8 Data   */
 // Features encoded in b23..b16
 #define LCD_C_FTR_MSK  0x00FF0000 
+#define LCD_C_FTR_SHFT         16
 #define LCD_C_BST      0x00010000  /*Booster             */
 #define LCD_C_CTR      0x00020000  /*Contrast Control    */
 #define LCD_C_ICN      0x00040000  /*Icons               */
 #define LCD_C_PDN      0x00080000  /*Power Down          */
 // Fonttable encoded in b15..b12
-#define LCD_C_FNT_MSK  0x0000F000 
-#define LCD_C_FT0      0x00000000  /*Default             */
-#define LCD_C_FT1      0x00001000  /*Font1, C            */
-#define LCD_C_FT2      0x00002000  /*Font2, R            */
+#define LCD_C_FNT_MSK  0x0000F000
+#define LCD_C_FNT_SHFT         12 
+#define LCD_C_F0       0x00000000  /*Default HD44780 UK/JAP    */
+#define LCD_C_FC       0x00001000  /*PCF21xxC                  */
+#define LCD_C_FR       0x00002000  /*PCF21XXR                  */
+#define LCD_C_FK       0x00003000  /*PCF21XXK                  */
+#define LCD_C_FRA      0x00004000  /*SSD1803 ROM_A UK/EU       */
+#define LCD_C_FRB      0x00005000  /*SSD1803 ROM_B UK/Cyrillic */
+#define LCD_C_FRC      0x00006000  /*SSD1803 ROM_C UK/JAP      */
+#define LCD_C_FD       0x00007000  /*SPLC780D EU/Cyrillic      */
+#define LCD_C_FT       0x00008000  /*ST7066-0T EU/Cyrillic     */
+
+// Type ID encoded in b7..b0
+#define LCD_C_ID_MSK   0x000000FF
+#define LCD_C_ID_SHFT           0
 
 /** A TextLCD interface for driving 4-bit HD44780-based LCDs
  *
@@ -168,7 +192,7 @@ public:
 //        LCD6x2     = (LCD_T_A | LCD_T_C6 | LCD_T_R2),     /**<  6x2 LCD panel */
         LCD8x1     = (LCD_T_A | LCD_T_C8 | LCD_T_R1),     /**<  8x1 LCD panel */
         LCD8x2     = (LCD_T_A | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel */
-        LCD8x2B    = (LCD_T_D | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel (actually 16x1) */
+        LCD8x2B    = (LCD_T_B | LCD_T_C8 | LCD_T_R2),     /**<  8x2 LCD panel (actually 16x1) */
 //        LCD10x2D   = (LCD_T_D | LCD_T_C10 | LCD_T_R2),    /**< 10x2 LCD panel, special mode SSD1803, 4-line but double height */        
         LCD10x4D   = (LCD_T_D | LCD_T_C10 | LCD_T_R4),    /**< 10x4 LCD panel, special mode SSD1803 */
         LCD12x1    = (LCD_T_A | LCD_T_C12 | LCD_T_R1),    /**< 12x1 LCD panel */
@@ -177,7 +201,7 @@ public:
         LCD12x3D1  = (LCD_T_D1 | LCD_T_C12 | LCD_T_R3),   /**< 12x3 LCD panel, special mode PCF21XX, KS0073 */
 //        LCD12x3G   = (LCD_T_G | LCD_T_C12 | LCD_T_R3),    /**< 12x3 LCD panel, special mode ST7036 */
         LCD12x4    = (LCD_T_A | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel */
-        LCD12x4D   = (LCD_T_B | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel, special mode PCF21XX, KS0073 */
+        LCD12x4D   = (LCD_T_D | LCD_T_C12 | LCD_T_R4),    /**< 12x4 LCD panel, special mode PCF21XX, KS0073 */
         LCD16x1    = (LCD_T_A | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel */
         LCD16x1C   = (LCD_T_C | LCD_T_C16 | LCD_T_R1),    /**< 16x1 LCD panel (actually 8x2) */
         LCD16x2    = (LCD_T_A | LCD_T_C16 | LCD_T_R2),    /**< 16x2 LCD panel (default) */
@@ -191,10 +215,10 @@ public:
         LCD20x1    = (LCD_T_A | LCD_T_C20 | LCD_T_R1),    /**< 20x1 LCD panel */
         LCD20x2    = (LCD_T_A | LCD_T_C20 | LCD_T_R2),    /**< 20x2 LCD panel */
 //        LCD20x3    = (LCD_T_A | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel */
-//        LCD20x3D   = (LCD_T_D | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel, special mode SSD1803 */
-//        LCD20x3D1  = (LCD_T_D1 | LCD_T_C20 | LCD_T_R3),   /**< 20x3 LCD panel, special mode SSD1803 */
+//        LCD20x3D   = (LCD_T_D | LCD_T_C20 | LCD_T_R3),    /**< 20x3 LCD panel, special mode SSD1803, KS0073 */
+//        LCD20x3D1  = (LCD_T_D1 | LCD_T_C20 | LCD_T_R3),   /**< 20x3 LCD panel, special mode SSD1803, KS0073 */
         LCD20x4    = (LCD_T_A | LCD_T_C20 | LCD_T_R4),    /**< 20x4 LCD panel */
-        LCD20x4D   = (LCD_T_D | LCD_T_C20 | LCD_T_R4),    /**< 20x4 LCD panel, special mode SSD1803 */
+        LCD20x4D   = (LCD_T_D | LCD_T_C20 | LCD_T_R4),    /**< 20x4 LCD panel, special mode SSD1803, KS0073 */
 //        LCD20x6    = (LCD_T_E | LCD_T_C20 | LCD_T_R6),    /**< 20x6 LCD panel, Two controller version */        
         LCD24x1    = (LCD_T_A | LCD_T_C24 | LCD_T_R1),    /**< 24x1 LCD panel */
         LCD24x2    = (LCD_T_A | LCD_T_C24 | LCD_T_R2),    /**< 24x2 LCD panel */
@@ -203,12 +227,15 @@ public:
         LCD24x4D   = (LCD_T_D | LCD_T_C24 | LCD_T_R4),    /**< 24x4 LCD panel, special mode KS0078 */
 //        LCD32x1    = (LCD_T_A | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel */
 //        LCD32x1C   = (LCD_T_C | LCD_T_C32 | LCD_T_R1),    /**< 32x1 LCD panel (actually 16x2) */
-//        LCD32x2    = (LCD_T_A | LCD_T_C32 | LCD_T_R2),    /**< 32x2 LCD panel */
-//        LCD32x4    = (LCD_T_A | LCD_T_C32 | LCD_T_R4),    /**< 32x4 LCD panel */
+        LCD32x2    = (LCD_T_A | LCD_T_C32 | LCD_T_R2),    /**< 32x2 LCD panel */
+//        LCD32x4    = (LCD_T_A | LCD_T_C32 | LCD_T_R4),    /**< 32x4 LCD panel, Two controller version ? */
 //        LCD40x1    = (LCD_T_A | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel */
 //        LCD40x1C   = (LCD_T_C | LCD_T_C40 | LCD_T_R1),    /**< 40x1 LCD panel (actually 20x2) */
         LCD40x2    = (LCD_T_A | LCD_T_C40 | LCD_T_R2),    /**< 40x2 LCD panel */
+//        LCD52x1    = (LCD_T_A | LCD_T_C52 | LCD_T_R1),    /**< 52x1 LCD panel, special mode KS0073 */        
+#if (LCD_TWO_CTRL == 1)
         LCD40x4    = (LCD_T_E | LCD_T_C40 | LCD_T_R4)     /**< 40x4 LCD panel, Two controller version */
+#endif     
     };
 
 
@@ -222,19 +249,20 @@ public:
         PCF2103_3V3     =  5 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2103 3V3 no Booster, 4/8 bit, I2C         */                                   
         PCF2113_3V3     =  6 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                           /**<  PCF2113 3V3 with Booster, 4/8 bit, I2C       */                           
         PCF2116_3V3     =  7 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST),                                       /**<  PCF2116 3V3 with Booster, 4/8 bit, I2C       */                           
-//        PCF2116C_3V3    =    | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FT1),                           /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */
-//        PCF2116K_3V3    =    | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FT2),                           /**<  PCF2116K 3V3 with Booster, 4/8 bit, I2C       */
+//        PCF2116C_3V3    =    | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FC),                            /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */
+//        PCF2116K_3V3    =    | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FK),                            /**<  PCF2116K 3V3 with Booster, 4/8 bit, I2C       */
         PCF2116_5V      =  8 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2116 5V no Booster, 4/8 bit, I2C          */
-        PCF2116C_5V     =  9 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FT1),                           /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */
+        PCF2116C_5V     =  9 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_FC),                            /**<  PCF2116C 3V3 with Booster, 4/8 bit, I2C       */
         PCF2119_3V3     = 10 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR),                           /**<  PCF2119 3V3 with Booster, 4/8 bit, I2C       */
-//        PCF2119C_3V3    = 11 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR | LCD_C_FT1),                /**<  PCF2119K 3V3 with Booster, 4/8 bit, I2C       */
-        PCF2119R_3V3    = 12 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR | LCD_C_FT2),                /**<  PCF2119R 3V3 with Booster, 4/8 bit, I2C       */
+//        PCF2119C_3V3    = 11 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR | LCD_C_FC),                /**<  PCF2119K 3V3 with Booster, 4/8 bit, I2C       */
+        PCF2119R_3V3    = 12 | (LCD_C_PAR | LCD_C_I2C     | LCD_C_BST | LCD_C_CTR | LCD_C_FR),                /**<  PCF2119R 3V3 with Booster, 4/8 bit, I2C       */
 //        PCF2119_5V      =    | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  PCF2119 5V no Booster, 4/8 bit, I2C          */
-        PT6314          = 13 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR),                                       /**<  PT6314  VFD, 4/8 bit, SPI3                   */
+        PT6314          = 13 | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR),                                       /**<  PT6314  VFD Controller, 4/8 bit, SPI3        */
+//        PT6880          = xx | (LCD_C_PAR | LCD_C_SPI3_16 | LCD_C_CTR),                                       /**<  PT6880  OLED controller, 4/8 bit, SPI3       */        
         SSD1803_3V3     = 14 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
 //        SSD1803_5V      = 15 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR | LCD_C_PDN),   /**<  SSD1803 3V3 with Booster, 4/8 bit, I2C, SPI3 */
-        ST7032_3V3      = 16 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_BST | LCD_C_CTR),               /**<  ST7032  3V3 with Booster, 4/8 bit, SPI4, I2C */   
-        ST7032_5V       = 17 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_CTR),                           /**<  ST7032  5V no Booster, 4/8 bit, SPI4, I2C    */           
+        ST7032_3V3      = 16 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_BST | LCD_C_CTR),               /**<  ST7032/SPLC792A 3V3 with Booster, 4/8 bit, SPI4, I2C */   
+        ST7032_5V       = 17 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_CTR),                           /**<  ST7032/SPLC792A 5V no Booster, 4/8 bit, SPI4, I2C    */           
         ST7036_3V3      = 18 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_BST | LCD_C_CTR),               /**<  ST7036  3V3 with Booster, 4/8 bit, SPI4, I2C */   
         ST7036_5V       = 19 | (LCD_C_PAR | LCD_C_SPI4    | LCD_C_I2C | LCD_C_BST | LCD_C_CTR),               /**<  ST7036  5V no Booster, 4/8 bit, SPI4, I2C    */   
         ST7066_ACM      = 20 | (LCD_C_PAR | LCD_C_I2C),                                                       /**<  ST7066 4/8 bit, I2C on ACM1602 using a PIC   */        
@@ -242,16 +270,17 @@ public:
         US2066_3V3      = 22 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_I2C | LCD_C_CTR | LCD_C_PDN),               /**<  US2066/SSD1311 3V3, 4/8 bit, I2C, SPI3 */
         WS0010          = 23 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_PDN),                                       /**<  WS0010/RS0010 OLED Controller, 4/8 bit, SPI3 */    
 //        WS0012          = 24 | (LCD_C_PAR | LCD_C_SPI3_10 | LCD_C_I2C | LCD_C_PDN),                           /**<  WS0012 4/8 bit, SPI, I2C                     */
-        HD66712         = 25 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_BST | LCD_C_PDN)                            /**<  HD66712 Controller, 4/8 bit, SPI3 */    
+        HD66712         = 25 | (LCD_C_PAR | LCD_C_SPI3_24 | LCD_C_BST | LCD_C_PDN),                           /**<  HD66712 Controller, 4/8 bit, SPI3 */    
+        SPLC792A_3V3    = 26 | (LCD_C_PAR | LCD_C_SPI3_9  | LCD_C_SPI4 | LCD_C_I2C | LCD_C_BST | LCD_C_CTR)   /**<  ST7032/SPLC792A 3V3 with Booster, 4/8 bit, SPI3, SPI4, I2C */
     };
 
 
     /** LCD Cursor control */
     enum LCDCursor {
         CurOff_BlkOff = 0x00,  /**<  Cursor Off, Blinking Char Off */    
-        CurOn_BlkOff  = 0x02,  /**<  Cursor On, Blinking Char Off */    
-        CurOff_BlkOn  = 0x01,  /**<  Cursor Off, Blinking Char On */    
-        CurOn_BlkOn   = 0x03   /**<  Cursor On, Blinking Char On */    
+        CurOff_BlkOn  = 0x01,  /**<  Cursor Off, Blinking Char On  */         
+        CurOn_BlkOff  = 0x02,  /**<  Cursor On, Blinking Char Off  */   
+        CurOn_BlkOn   = 0x03   /**<  Cursor On, Blinking Char On   */
     };
 
     /** LCD Display control */
@@ -278,6 +307,7 @@ public:
         Bottom           /**<  Upside down view */            
     };
 
+#if (LCD_BIGFONT == 1) 
    /** LCD BigFont control, supported for some Controllers */
     enum LCDBigFont {
         None,            /**<  no lines              */    
@@ -286,15 +316,53 @@ public:
         BottomLine,      /**<  2+3 line or 3+4 line  */
         TopBottomLine    /**<  1+2 line and 3+4 line */
     };
+#endif
 
+#if (LCD_FONTSEL == 1) 
+   /** LCD setFont control.
+       Note: most controllers support only one font and the hardware specific
+       fonttable is encoded as part of the controller type number (eg PCF21XXC or PCF21XXR).
+       Some controllers support multiple tables that can only be selected by logic levels on a few pins.
+       Some controllers also support runtime fontable switching through a specific instruction */
+    enum LCDFont {
+                               /**< HD44780 fonttable      */
+        Font_0  = LCD_C_F0,    /**< default, UK/JAP        */
+                               /**< PCF21XX fonttables     */
+        Font_C  = LCD_C_FC,    /**< PCF21XXC               */
+        Font_R  = LCD_C_FR,    /**< PCF21XXR               */
+                               /**< SSD1803 ROM tables     */
+        Font_RA = LCD_C_FRA,   /**< UK/EU                  */
+        Font_RB = LCD_C_FRB,   /**< UK/Cyrillic            */
+        Font_RC = LCD_C_FRC,   /**< default, UK/JAP        */
+        Font_D  = LCD_C_FD,    /**< SPLC780D Cyrillic      */
+        Font_T  = LCD_C_FT     /**< ST7066-0T Cyrillic     */
+    };
+#endif
 
+#if ((LCD_C_FONT == 1) || (LCD_R_FONT == 1)) //PCF21xxC or PCF21xxR font
    /** Convert ASCII character code to the LCD fonttable code
      *
      * @param c The character to write to the display
      * @return The character code for the specific fonttable of the controller
      */
    int ASCII_2_LCD (int c);
+#endif
 
+#if(LCD_UTF8_FONT == 1)       
+    /** Convert UTF8 2-byte character code to the LCD fonttable code
+      * @param c The character to write to the display
+      * @return character code for the specific fonttable of the controller or -1 if UTF8 code is not yet complete or incorrect
+      *
+      * Orig by Andriy, Modified by WH
+      * 
+      * Note: The UTF8 decoding table for a specific controller is defined and selected in file TextLCD_UTF8.inc
+      * The table is accessed in this UTF_2_LCD() method through
+      *   #define UTF_FIRST, UTF_LAST, UTF_SEQ_REC_FIRST, UTF_SEQ_REC_LAST and 
+      *   #define UTF_SEQ_RECODE and UTF_RND_RECODE
+      */      
+      int UTF_2_LCD (int c);       
+#endif
+ 
 
 #if(LCD_PRINTF != 1)
    /** Write a character to the LCD
@@ -399,6 +467,7 @@ public:
     void setUDCBlink(LCDBlink blinkMode);
 #endif
 
+#if(LCD_CONTRAST == 1)
     /** Set Contrast
      * setContrast method is supported by some compatible devices (eg ST7032i) that have onboard LCD voltage generation
      * Code imported from fork by JH1PJL
@@ -407,6 +476,7 @@ public:
      * @return none
      */
     void setContrast(unsigned char c = LCD_DEF_CONTRAST);
+#endif
 
 #if(LCD_POWER == 1)
     /** Set Power
@@ -435,9 +505,21 @@ public:
      * @param lines  The selected Big Font lines (None, TopLine, CenterLine, BottomLine, TopBottomLine)
      *                                            Double height characters can be shown on lines 1+2, 2+3, 3+4 or 1+2 and 3+4
      *                                            Valid double height lines depend on the LCDs number of rows.
+     * @return none     
      */
     void setBigFont(LCDBigFont lines);
 #endif
+
+#if(LCD_FONTSEL == 1)
+    /** Set Font
+     * setFont method is supported by some compatible devices (eg SSD1803, US2066, ST7070) 
+     *
+     * @param LCDFont font  The selected Font 
+     * @return none     
+     */
+    void setFont(LCDFont font = Font_0);
+#endif
+
 
 #if(LCD_ICON==1)
     /** Set Icons

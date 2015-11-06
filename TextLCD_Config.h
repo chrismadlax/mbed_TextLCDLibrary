@@ -8,6 +8,8 @@
  *               2015, v06: WH, Performance improvement I2C portexpander
  *               2015, v07: WH, Fixed Adafruit I2C/SPI portexpander pinmappings, fixed SYDZ Backlight
  *               2015, v08: WH, Added defines to reduce memory footprint (eg LCD_ICON), added some I2C portexpander defines 
+ *               2015, v09: WH, Added defines to reduce memory footprint (LCD_TWO_CTRL, LCD_CONTRAST, LCD_UTF8_FONT),
+ *                              Added UTF8_2_LCD decode for Cyrilic font (By Andriy Ribalko). Added setFont()
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -50,9 +52,16 @@
 #define LCD_INVERT     1           /* Enable display Invert implementation -0.5K codesize*/
 #define LCD_POWER      1           /* Enable Power control implementation -0.1K codesize*/
 #define LCD_BLINK      1           /* Enable UDC and Icon Blink control implementation -0.8K codesize*/
+#define LCD_CONTRAST   1           /* Enable Contrast control implementation -0.9K codesize*/
+#define LCD_TWO_CTRL   1           /* Enable LCD40x4 (two controller) implementation -0.1K codesize*/
+#define LCD_FONTSEL    0           /* Enable runtime font select implementation using setFont -0.9K codesize*/
 
-//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2116C, PCF2119R)
-#define LCD_DEF_FONT   1
+//Select option to activate default fonttable or alternatively use conversion for specific controller versions (eg PCF2116C, PCF2119R, SSD1803, US2066)
+#define LCD_DEF_FONT   1           //Default HD44780 font
+//#define LCD_C_FONT     1           //PCF21xxC font
+//#define LCD_R_FONT     1           //PCF21xxR font
+//#define LCD_UTF8_FONT  1           /* Enable UTF8 Support (eg Cyrillic tables) -0.4K codesize*/
+//#define LCD_UTF8_CYR_B 1           /*  Select specific UTF8 Cyrillic table (SSD1803 ROM_B)              */
 
 //Pin Defines for I2C PCF8574/PCF8574A or MCP23008 and SPI 74595 bus expander interfaces
 //Different commercially available LCD portexpanders use different wiring conventions.
@@ -510,6 +519,12 @@
 #define AC780_SA2      0x7C
 #define AC780_SA3      0x7E
 
+/* SPLC792A is clone of ST7032i */
+#define SPLC792A_SA0   0x78
+#define SPLC792A_SA1   0x7A
+#define SPLC792A_SA2   0x7C
+#define SPLC792A_SA3   0x7E
+
 //Some native I2C controllers dont support ACK. Set define to '0' to allow code to proceed even without ACK
 //#define LCD_I2C_ACK    0
 #define LCD_I2C_ACK    1
@@ -520,8 +535,16 @@
 #define LCD_DEF_CONTRAST    0x20
 
 //ST7032 EastRising ERC1602FS-4 display
-//Contrast setting 6 significant bits
-//Voltage Multiplier setting 3 significant bits
+//Contrast setting 6 significant bits (0..63)
+//Voltage Multiplier setting 3 significant bits:
+// 0: 1.818V
+// 1: 2.222V
+// 2: 2.667V
+// 3: 3.333V
+// 4: 3.636V (ST7032 default)
+// 5: 4.000V
+// 6: 4.444V
+// 7: 5.000V
 #define LCD_ST7032_CONTRAST 0x28 
 #define LCD_ST7032_RAB      0x04
 
@@ -552,5 +575,18 @@
 //Contrast setting 2 significant bits, use 6 for compatibility
 #define LCD_PT63_CONTRAST   0x3F
 
+//SPLC792A is clone of ST7032i
+//Contrast setting 6 significant bits (0..63)
+//Voltage Multiplier setting 3 significant bits:
+// 0: 1.818V
+// 1: 2.222V
+// 2: 2.667V
+// 3: 3.333V (SPLC792A default) 
+// 4: 3.636V
+// 5: 4.000V
+// 6: 4.444V
+// 7: 5.000V
+#define LCD_SPLC792A_CONTRAST 0x28
+#define LCD_SPLC792A_RAB      0x04
 
 #endif //MBED_TEXTLCDCONFIG_H

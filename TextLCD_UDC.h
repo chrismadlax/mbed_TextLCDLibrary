@@ -2,6 +2,7 @@
  * Copyright (c) 2014, WH
  *               2014, v01: WH, Extracted from TextLCD.h as of v14
  *               2015, v02: WH, Added some UDC definitions and commented out several UDCs
+ *               2015, v03: WH, Added some UDC definitions 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -66,8 +67,9 @@ extern const char udc_Bat_Lo[];  // Battery Low
 extern const char udc_AC[];      // AC Power
 
 extern const char udc_smiley[];  // Smiley
-//extern const char udc_droopy[];  // Droopey
-//extern const char udc_note[];    // Note
+//extern const char udc_droopy[];   // Droopey
+//extern const char udc_note[];     // Note
+//extern const char udc_note_off[]; // Note Off
 
 //extern const char udc_bar_1[];   // Bar 1
 //extern const char udc_bar_2[];   // Bar 11
@@ -95,6 +97,7 @@ extern const char udc_smiley[];  // Smiley
 //extern const char udc_OK[];       // Ok
 //extern const char udc_1_2[];      // 1/2
 //extern const char udc_Euro[];     // Euro symbol
+//extern const char udc_key[];      // Key symbol
 
 //extern const char udc_None[]; 
 //extern const char udc_All[];
