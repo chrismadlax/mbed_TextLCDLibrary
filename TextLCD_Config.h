@@ -68,7 +68,7 @@
 //LCD and serial portexpanders should be wired according to the tables below.
 //
 //Select Serial Port Expander Hardware module (one option only)
-#define DEFAULT        1
+#define DEFAULT        0
 #define ADAFRUIT       0
 #define DFROBOT        0
 #define LCM1602        0
@@ -78,7 +78,7 @@
 #define SYDZ           0
 #define WIDEHK         0
 #define LCDPLUG        0
-
+#define fc113          1
 #if (DEFAULT==1)
 //Definitions for default (WH) mapping between serial port expander pins and LCD controller
 //This hardware supports the I2C bus expander (PCF8574/PCF8574A or MCP23008) and SPI bus expander (74595) interfaces
@@ -214,7 +214,8 @@
 #define BACKLIGHT_INV  0
 #endif
 
-#if ((YWROBOT==1) || (LCM1602==1))
+#if ((YWROBOT==1) || (LCM1602==1)) || (fc113==1)
+//Definitions for FC113 based Pcf8574T Module mapping between serial port expander pins and LCD controller. 
 //Definitions for YWROBOT LCM1602 V1 Module mapping between serial port expander pins and LCD controller. 
 //Very similar to DFROBOT. Also marked as 'Funduino'. This hardware uses PCF8574.
 //Slaveaddress may be set by solderbridges (default 0x4E). SDA/SCL has no pullup Resistors onboard.
@@ -253,7 +254,7 @@
 #define MCP23008       0
 
 //Inverted Backlight control
-#define BACKLIGHT_INV  0
+#define BACKLIGHT_INV  1
 #endif
 
 #if ((GYLCD==1) || (MJKDZ==1))
